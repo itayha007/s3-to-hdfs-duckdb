@@ -5,7 +5,7 @@ spring:
 kafka:
   bootstrap-servers: localhost:9092
   group-id: s3-to-hdfs-consumer
-  topic: input
+  topic: etl.ecommerce.orders
   concurrency: 1
 
 s3:

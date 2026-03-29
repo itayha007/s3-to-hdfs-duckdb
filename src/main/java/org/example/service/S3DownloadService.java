@@ -25,6 +25,7 @@ public class S3DownloadService {
      */
     public Path downloadToTempFile(String bucket, String key) throws IOException {
         Path tempFile = Files.createTempFile("s3-download-", ".json");
+        Files.delete(tempFile); // ResponseTransformer.toFile() uses Files.copy which requires the file not to exist
         log.info("Downloading s3://{}/{} to {}", bucket, key, tempFile);
 
         GetObjectRequest request = GetObjectRequest.builder()

@@ -51,18 +51,12 @@ public class KafkaConsumerService {
             return;
         }
 
-        if (ref.getBucket() == null || ref.getKeys() == null || ref.getKeys().isEmpty()) {
-            log.warn("KafkaReference missing bucket or keys, skipping");
-            acknowledgment.acknowledge();
-            return;
-        }
 
         String pipelineName = headers.getPipelineName();
         PipelineSchema schema = schemaService.getSchema(pipelineName);
 
-        for (String key : ref.getKeys()) {
-            processKey(ref.getBucket(), key, pipelineName, schema);
-        }
+            processKey(ref.getBucket(), ref.getKey(), pipelineName, schema);
+
 
         acknowledgment.acknowledge();
     }
