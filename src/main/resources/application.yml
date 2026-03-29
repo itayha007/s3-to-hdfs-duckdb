@@ -26,7 +26,7 @@ hdfs:
 
 batch:
   max-parquet-bytes: 134217728  # 128 MB — flush when buffered Parquet files reach this size
-  flush-interval-ms: 300000     # 5 minutes — flush regardless of size
+  flush-interval-ms: 60000     # 5 minutes — flush regardless of size
 
 logging:
   config: classpath:log4j2.xml

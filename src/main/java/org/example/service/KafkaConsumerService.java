@@ -15,12 +15,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
 
+
 @Log4j2
 @Service
 @RequiredArgsConstructor
 public class KafkaConsumerService {
 
-    private final S3DownloadService s3DownloadService;
     private final DuckDbService duckDbService;
     private final SchemaService schemaService;
     private final BatchManager batchManager;
@@ -63,26 +63,18 @@ public class KafkaConsumerService {
 
     /**
      * Per-key flow:
-     *  1. Download S3 JSON → temp file  (bytes never touch JVM heap)
-     *  2. DuckDB converts JSON → small Parquet  (off-heap, schema-typed)
-     *  3. Delete JSON temp immediately
-     *  4. Hand Parquet to BatchManager — flushed to HDFS when 128 MB or 5 min threshold hit
+     *  1. DuckDB reads JSON directly from S3 → small Parquet  (off-heap, schema-typed)
+     *  2. Hand Parquet to BatchManager — flushed to HDFS when 128 MB or 5 min threshold hit
      */
     private void processKey(String bucket, String key,
                              String pipelineName, PipelineSchema schema) {
-        Path jsonTempFile = null;
         Path parquetTempFile = null;
         try {
-            jsonTempFile = s3DownloadService.downloadToTempFile(bucket, key);
-            parquetTempFile = duckDbService.convertJsonToParquet(jsonTempFile, schema);
-            deleteSilently(jsonTempFile);
-            jsonTempFile = null;
-
+            parquetTempFile = duckDbService.convertJsonToParquet(bucket, key, schema);
             batchManager.add(pipelineName, parquetTempFile);
             parquetTempFile = null; // BatchManager owns it now
         } catch (Exception e) {
             log.error("Failed to process s3://{}/{}", bucket, key, e);
-            deleteSilently(jsonTempFile);
             deleteSilently(parquetTempFile);
             throw new RuntimeException("Failed for s3://" + bucket + "/" + key, e);
         }

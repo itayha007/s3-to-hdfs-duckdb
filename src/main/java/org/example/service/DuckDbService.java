@@ -3,10 +3,12 @@ package org.example.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.example.config.DuckDbConfig;
+import org.example.config.S3Config;
 import org.example.model.PipelineSchema;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -22,19 +24,21 @@ import java.util.stream.Collectors;
 public class DuckDbService {
 
     private final DuckDbConfig duckDbConfig;
+    private final S3Config s3Config;
 
     /**
-     * Converts a single JSON file (array or single object) to a small Parquet file
+     * Converts a single S3 JSON object (array or single object) to a small Parquet file
      * using the pipeline schema for typed columns.
      * Called once per Kafka message; the resulting Parquet is buffered in BatchManager.
      */
-    public Path convertJsonToParquet(Path jsonFile, PipelineSchema schema)
+    public Path convertJsonToParquet(String bucket, String key, PipelineSchema schema)
             throws IOException, SQLException {
 
         Files.createDirectories(Path.of(duckDbConfig.getTempDirectory()));
         Path out = newTempParquet();
 
-        log.debug("JSON→Parquet: {} [pipeline={}]", jsonFile, schema.getPipelineName());
+        String s3Uri = "s3://" + bucket + "/" + key;
+        log.info("JSON→Parquet: {} [pipeline={}]", s3Uri, schema.getPipelineName());
 
         String columnsMap = schema.getColumns().stream()
                 .map(c -> c.getName() + ": '" + c.getDuckDbType() + "'")
@@ -43,10 +47,10 @@ public class DuckDbService {
         String sql = String.format(
                 "COPY (SELECT * FROM read_json('%s', columns=%s, format='auto')) " +
                 "TO '%s' (FORMAT PARQUET, COMPRESSION SNAPPY)",
-                jsonFile.toAbsolutePath(), columnsMap, out.toAbsolutePath());
+                s3Uri, columnsMap, out.toAbsolutePath());
 
         execute(sql);
-        log.debug("Small Parquet: {} ({} KB)", out, Files.size(out) / 1024);
+        log.info("Small Parquet: {} ({} KB)", out, Files.size(out) / 1024);
         return out;
     }
 
@@ -81,6 +85,17 @@ public class DuckDbService {
             stmt.execute("SET memory_limit='" + duckDbConfig.getMemoryLimit() + "'");
             stmt.execute("SET temp_directory='" + duckDbConfig.getTempDirectory() + "'");
             stmt.execute("SET threads=" + duckDbConfig.getThreads());
+
+            stmt.execute("INSTALL httpfs");
+            stmt.execute("LOAD httpfs");
+            URI endpoint = URI.create(s3Config.getEndpoint());
+            stmt.execute("SET s3_endpoint='" + endpoint.getHost() + ":" + endpoint.getPort() + "'");
+            stmt.execute("SET s3_region='" + s3Config.getRegion() + "'");
+            stmt.execute("SET s3_access_key_id='" + s3Config.getAccessKey() + "'");
+            stmt.execute("SET s3_secret_access_key='" + s3Config.getSecretKey() + "'");
+            stmt.execute("SET s3_use_ssl=" + ("https".equals(endpoint.getScheme()) ? "true" : "false"));
+            stmt.execute("SET s3_url_style='" + (s3Config.isPathStyleAccess() ? "path" : "vhost") + "'");
+
             log.debug("DuckDB SQL: {}", sql);
             stmt.execute(sql);
         }
