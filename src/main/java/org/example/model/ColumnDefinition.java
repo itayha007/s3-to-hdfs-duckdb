@@ -11,4 +11,6 @@ public class ColumnDefinition {
     private String name;
     /** DuckDB SQL type string, e.g. VARCHAR, BIGINT, TIMESTAMP, STRUCT(x DOUBLE), VARCHAR[] */
     private String duckDbType;
+    /** False when the Avro field is non-union and has no default — must not be null in the JSON. */
+    private boolean nullable;
 }

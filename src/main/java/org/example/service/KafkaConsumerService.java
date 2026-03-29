@@ -26,10 +26,7 @@ public class KafkaConsumerService {
     private final BatchManager batchManager;
     private final ObjectMapper objectMapper;
 
-    @KafkaListener(
-            topics = "${kafka.topic}",
-            groupId = "${kafka.group-id}",
-            containerFactory = "kafkaListenerContainerFactory")
+    @KafkaListener(topics = "${kafka.topic}", groupId = "${kafka.group-id}", containerFactory = "kafkaListenerContainerFactory")
     public void consume(ConsumerRecord<byte[], byte[]> record, Acknowledgment acknowledgment) {
         Headers headers = extractHeaders(record);
         log.info("Received: sourceType={}, pipelineName={}, partition={}, offset={}",
@@ -54,20 +51,17 @@ public class KafkaConsumerService {
 
         String pipelineName = headers.getPipelineName();
         PipelineSchema schema = schemaService.getSchema(pipelineName);
-
-            processKey(ref.getBucket(), ref.getKey(), pipelineName, schema);
-
-
+        processKey(ref.getBucket(), ref.getKey(), pipelineName, schema);
         acknowledgment.acknowledge();
     }
 
     /**
      * Per-key flow:
-     *  1. DuckDB reads JSON directly from S3 → small Parquet  (off-heap, schema-typed)
-     *  2. Hand Parquet to BatchManager — flushed to HDFS when 128 MB or 5 min threshold hit
+     *  1. Validate JSON against Avro schema (missing required fields, wrong types, bad arrays)
+     *  2. DuckDB reads JSON directly from S3 → small Parquet  (off-heap, schema-typed)
+     *  3. Hand Parquet to BatchManager — flushed to HDFS when 128 MB or 5 min threshold hit
      */
-    private void processKey(String bucket, String key,
-                             String pipelineName, PipelineSchema schema) {
+    private void processKey(String bucket, String key, String pipelineName, PipelineSchema schema) {
         Path parquetTempFile = null;
         try {
             parquetTempFile = duckDbService.convertJsonToParquet(bucket, key, schema);

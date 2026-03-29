@@ -17,9 +17,16 @@ class AvroToDuckDbConverter {
     static PipelineSchema convert(String pipelineName, Schema avroSchema) {
         List<ColumnDefinition> cols = new ArrayList<>();
         for (Schema.Field field : avroSchema.getFields()) {
-            cols.add(new ColumnDefinition(field.name(), toType(field.schema())));
+            cols.add(new ColumnDefinition(field.name(), toType(field.schema()), isNullable(field)));
         }
         return new PipelineSchema(pipelineName, cols);
+    }
+
+    private static boolean isNullable(Schema.Field field) {
+        Schema schema = field.schema();
+        boolean nullUnion = schema.getType() == Schema.Type.UNION &&
+                schema.getTypes().stream().anyMatch(t -> t.getType() == Schema.Type.NULL);
+        return nullUnion || field.hasDefaultValue();
     }
 
     private static String toType(Schema schema) {
