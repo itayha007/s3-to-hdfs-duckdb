@@ -1,0 +1,303 @@
+# This setup allows you to both connect from within the docker-compose context as well as from services running on your local
+# machine but not as part of the docker-compose setup. Any client connecting to the broker from the outside can connect to
+# localhost:9092 while services running as part of the docker-compose connect to broker:9093.
+#
+# To access kafka-ui: http://localhost:7777
+#
+# I hope this helps someone out there! :)
+
+version: '3'
+networks:
+  local-kafka:
+    driver: bridge
+
+services:
+  localstack:
+    container_name: "${LOCALSTACK_DOCKER_NAME-localstack-main}"
+    image: localstack/localstack:s3-latest
+    networks:
+      - local-kafka
+    ports:
+      - "127.0.0.1:4566:4566"
+    volumes:
+      - "./init-s3.py:/etc/localstack/init/ready.d/init-s3.py"  # ready hook
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.0.1
+    container_name: zookeeper
+    networks:
+      - local-kafka
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  broker:
+    image: confluentinc/cp-kafka:7.0.1
+    container_name: broker
+    networks:
+      - local-kafka
+    ports:
+      # To learn about configuring Kafka for access across networks see
+      # https://www.confluent.io/blog/kafka-client-cannot-connect-to-broker-on-aws-on-docker-etc/
+      - "9092:9092"
+      - "9093:9093"
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_LISTENERS: PLAINTEXT_INTERNAL://0.0.0.0:29092,PLAINTEXT_C://0.0.0.0:9093,PLAINTEXT_L://0.0.0.0:9092,
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT_INTERNAL://broker:29092,PLAINTEXT_L://localhost:9092,PLAINTEXT_C://broker:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT_INTERNAL:PLAINTEXT,PLAINTEXT_L:PLAINTEXT,PLAINTEXT_C:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
+
+      # 🔴 allow larger messages (broker side)
+      # Accept up to 5 MiB records on the broker
+      KAFKA_MESSAGE_MAX_BYTES: 6000000
+      # Make replication able to fetch those records (set comfortably larger)
+      KAFKA_REPLICA_FETCH_MAX_BYTES: 12000000
+  pipelines-ui:
+    image: itayha7/ui:latest
+    container_name: pipelines-ui
+    networks:
+      - local-kafka
+    depends_on:
+      - broker
+      - localstack
+    ports:
+      - "4004:4000"
+
+  hdfs-namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: hdfs-namenode
+    networks:
+      - local-kafka
+    ports:
+      - "8020:8020"
+      - "9870:9870"
+    environment:
+      - CLUSTER_NAME=local-hadoop
+      - HDFS_CONF_dfs_permissions_enabled=false
+    volumes:
+      - hdfs-namenode:/hadoop/dfs/namenode
+
+  hdfs-datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: hdfs-datanode
+    networks:
+      - local-kafka
+    depends_on:
+      - hdfs-namenode
+    ports:
+      - "9864:9864"
+      - "9866:9866"
+    environment:
+      - CLUSTER_NAME=local-hadoop
+      - CORE_CONF_fs_defaultFS=hdfs://hdfs-namenode:8020
+      - HDFS_CONF_dfs_namenode_datanode_registration_ip___hostname___check=false
+      - HDFS_CONF_dfs_permissions_enabled=false
+      - HDFS_CONF_dfs_datanode_address=0.0.0.0:9866
+      - HDFS_CONF_dfs_datanode_http_address=0.0.0.0:9864
+      - HDFS_CONF_dfs_datanode_use_datanode_hostname=true
+      - HDFS_CONF_dfs_datanode_hostname=localhost
+      - HDFS_CONF_dfs_client_use_datanode_hostname=true
+    volumes:
+      - hdfs-datanode:/hadoop/dfs/datanode
+
+  iceberg-rest:
+    image: tabulario/iceberg-rest:1.6.0
+    container_name: iceberg-rest
+    networks:
+      - local-kafka
+    depends_on:
+      - localstack
+    ports:
+      - "8181:8181"
+    environment:
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_REGION=us-east-1
+      - CATALOG_WAREHOUSE=s3://warehouse/
+      - CATALOG_IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
+      - CATALOG_S3_ENDPOINT=http://localstack:4566
+      - CATALOG_S3_PATH__STYLE__ACCESS=true
+
+  iceberg-init:
+    image: curlimages/curl:latest
+    container_name: iceberg-init
+    networks:
+      - local-kafka
+    depends_on:
+      - iceberg-rest
+    entrypoint: >
+      sh -c "
+        echo 'Waiting for Iceberg REST catalog...';
+        sleep 5;
+        until curl -s http://iceberg-rest:8181/v1/config > /dev/null 2>&1; do
+          echo 'Waiting for Iceberg REST...';
+          sleep 2;
+        done;
+        echo 'Creating default namespace...';
+        curl -X POST http://iceberg-rest:8181/v1/namespaces \
+          -H 'Content-Type: application/json' \
+          -d '{\"namespace\": [\"default\"]}' || true;
+        echo 'Namespace created!';
+      "
+    restart: "no"
+
+  trino:
+    image: trinodb/trino:467
+    container_name: trino
+    networks:
+      - local-kafka
+    depends_on:
+      - iceberg-rest
+      - localstack
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./trino/catalog:/etc/trino/catalog
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui
+    container_name: kafka-ui
+    networks:
+      - local-kafka
+    depends_on:
+      - broker
+    ports:
+      - "7777:8080"
+    restart: always
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=broker
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=broker:9093
+      - KAFKA_CLUSTERS_0_ZOOKEEPER=zookeeper:2181
+
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.7.0
+    container_name: kafka-exporter
+    networks:
+      - local-kafka
+    depends_on:
+      - broker
+    command:
+      - --kafka.server=broker:9093
+      - --web.listen-address=:9308
+    ports:
+      - "9308:9308"
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.51.1
+    container_name: prometheus
+    networks:
+      - local-kafka
+    depends_on:
+      - kafka-exporter
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+
+  grafana:
+    image: grafana/grafana:10.4.3
+    container_name: grafana
+    networks:
+      - local-kafka
+    depends_on:
+      - prometheus
+    ports:
+      - "3000:3000"
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_USER: admin
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+
+  superset-redis:
+    image: redis:7-alpine
+    container_name: superset-redis
+    networks:
+      - local-kafka
+    restart: unless-stopped
+
+  superset-db:
+    image: postgres:15-alpine
+    container_name: superset-db
+    networks:
+      - local-kafka
+    environment:
+      POSTGRES_USER: superset
+      POSTGRES_PASSWORD: superset
+      POSTGRES_DB: superset
+    volumes:
+      - superset-db:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  superset:
+    image: superset-trino:latest
+    container_name: superset
+    networks:
+      - local-kafka
+    depends_on:
+      - superset-db
+      - superset-redis
+      - trino
+    ports:
+      - "8088:8088"
+    environment:
+      SUPERSET_SECRET_KEY: supersecretkey123
+      DATABASE_URL: postgresql+psycopg2://superset:superset@superset-db:5432/superset
+      REDIS_URL: redis://superset-redis:6379/0
+      SUPERSET_LOAD_EXAMPLES: "no"
+    volumes:
+      - ./superset:/app/superset_home
+    restart: unless-stopped
+
+  superset-init:
+    image: superset-trino:latest
+    container_name: superset-init
+    networks:
+      - local-kafka
+    depends_on:
+      - superset-db
+      - superset-redis
+    environment:
+      SUPERSET_SECRET_KEY: supersecretkey123
+      DATABASE_URL: postgresql+psycopg2://superset:superset@superset-db:5432/superset
+      REDIS_URL: redis://superset-redis:6379/0
+    volumes:
+      - ./superset:/app/superset_home
+    command: >
+      sh -c "
+        echo 'Waiting for postgres...' &&
+        sleep 10 &&
+        superset db upgrade &&
+        superset fab create-admin --username admin --firstname Admin --lastname User --email admin@example.com --password admin || true &&
+        superset init &&
+        echo 'Superset initialized!'
+      "
+    restart: "no"
+
+volumes:
+  hdfs-namenode:
+  hdfs-datanode:
+  superset-db:
+#trino://trino@trino:8080/iceberg
+
+#  ALTER TABLE iceberg.default.etl_ecommerce_orders
+#  EXECUTE expire_snapshots(
+#  retention_threshold => '60s'
+#  );
+#
+#  ALTER TABLE iceberg.default.etl_ecommerce_orders
+#  EXECUTE remove_orphan_files(retention_threshold => '60s');
+
+#  ALTER TABLE etl_ecommerce_orders EXECUTE optimize(file_size_threshold => '100MB');
