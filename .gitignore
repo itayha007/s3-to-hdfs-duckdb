@@ -1,0 +1,4 @@
+target/
+
+extensions/**/*.duckdb_extension
+extensions/**/*.duckdb_extension.gz
