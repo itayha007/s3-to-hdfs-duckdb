@@ -12,4 +12,8 @@ import lombok.NoArgsConstructor;
 public class KafkaReference {
     private String bucket;
     private String key;
+
+    public String toS3Uri() {
+        return "s3://" + bucket + "/" + key;
+    }
 }

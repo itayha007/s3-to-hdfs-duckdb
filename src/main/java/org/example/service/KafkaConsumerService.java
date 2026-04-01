@@ -51,8 +51,7 @@ public class KafkaConsumerService {
 
         String pipelineName = headers.getPipelineName();
         PipelineSchema schema = schemaService.getSchema(pipelineName);
-        processKey(ref.getBucket(), ref.getKey(), pipelineName, schema);
-        acknowledgment.acknowledge();
+        processKey(ref, pipelineName, schema, acknowledgment);
     }
 
     /**
@@ -61,16 +60,17 @@ public class KafkaConsumerService {
      *  2. DuckDB reads JSON directly from S3 → small Parquet  (off-heap, schema-typed)
      *  3. Hand Parquet to BatchManager — flushed to HDFS when 128 MB or 5 min threshold hit
      */
-    private void processKey(String bucket, String key, String pipelineName, PipelineSchema schema) {
+    private void processKey(KafkaReference ref, String pipelineName,
+                             PipelineSchema schema, Acknowledgment acknowledgment) {
         Path parquetTempFile = null;
         try {
-            parquetTempFile = duckDbService.convertJsonToParquet(bucket, key, schema);
-            batchManager.add(pipelineName, parquetTempFile);
+            parquetTempFile = duckDbService.convertJsonToParquet(ref, schema);
+            batchManager.add(pipelineName, parquetTempFile, acknowledgment);
             parquetTempFile = null; // BatchManager owns it now
         } catch (Exception e) {
-            log.error("Failed to process s3://{}/{}", bucket, key, e);
+            log.error("Failed to process {}", ref.toS3Uri(), e);
             deleteSilently(parquetTempFile);
-            throw new RuntimeException("Failed for s3://" + bucket + "/" + key, e);
+            throw new RuntimeException("Failed to process " + ref.toS3Uri(), e);
         }
     }
 

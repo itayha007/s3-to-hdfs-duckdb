@@ -3,6 +3,7 @@ package org.example.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.example.config.BatchConfig;
+import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -33,16 +34,17 @@ public class BatchManager {
 
     /**
      * Adds a small Parquet temp file to the pipeline's batch.
-     * BatchManager owns the file after this call — do not delete it externally.
+     * BatchManager owns the file and the acknowledgment after this call.
+     * The acknowledgment is committed only after the batch is successfully written to HDFS.
      * Flushes immediately if the Parquet size threshold is exceeded.
      */
-    public void add(String pipelineName, Path parquetFile) throws Exception {
+    public void add(String pipelineName, Path parquetFile, Acknowledgment acknowledgment) throws Exception {
         long size = Files.size(parquetFile);
         PipelineBatch batch = batches.computeIfAbsent(pipelineName, PipelineBatch::new);
 
         boolean shouldFlush;
         synchronized (batch) {
-            batch.add(parquetFile, size);
+            batch.add(parquetFile, size, acknowledgment);
             shouldFlush = batch.getTotalBytes() >= batchConfig.getMaxParquetBytes();
         }
 
@@ -66,9 +68,11 @@ public class BatchManager {
         if (batch == null) return;
 
         List<Path> files;
+        List<Acknowledgment> acks;
         synchronized (batch) {
             if (batch.isEmpty()) return;
             files = batch.drainFiles();
+            acks = batch.drainAcks();
         }
 
         long totalMb = files.stream().mapToLong(f -> {
@@ -81,8 +85,11 @@ public class BatchManager {
         try {
             mergedParquet = duckDbService.mergeParquets(files);
             hdfsWriterService.writeToHdfs(mergedParquet, pipelineName);
+            // Acknowledge only after data is safely on HDFS
+            acks.forEach(Acknowledgment::acknowledge);
         } catch (Exception e) {
-            log.error("Failed to flush pipeline '{}'", pipelineName, e);
+            log.error("Failed to flush pipeline '{}' — {} message(s) will be redelivered on restart",
+                    pipelineName, acks.size(), e);
         } finally {
             files.forEach(this::deleteSilently);
             if (mergedParquet != null) deleteSilently(mergedParquet);

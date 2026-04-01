@@ -16,9 +16,11 @@ s3:
   path-style-access: true
 
 duckdb:
-  memory-limit: "4GB"
-  temp-directory: /tmp/duckdb_tmp
-  threads: 4
+  properties:
+    memory_limit: "4GB"
+    temp_directory: /tmp/duckdb_tmp
+    threads: "4"
+    extension_directory: extensions
 
 hdfs:
   namenode: hdfs://localhost:8020
