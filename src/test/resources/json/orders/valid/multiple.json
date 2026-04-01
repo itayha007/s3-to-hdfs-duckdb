@@ -1,0 +1,41 @@
+{
+  "input": [
+    {
+      "pipelineName": "etl_ecommerce_orders",
+      "orderId": "ORD-001",
+      "eventType": "placed",
+      "occurredAt": "2024-01-15T10:00:00Z",
+      "customerId": "CUST-100",
+      "salesChannel": "web",
+      "currency": "USD",
+      "pricing": {"subtotal": 99.99, "tax": 8.99, "discounts": 0.0, "totalAmount": 108.98},
+      "items": [{"sku": "SKU-A", "quantity": 1, "unitPrice": 99.99}],
+      "shipping": {"city": "Los Angeles", "method": "express", "promisedDate": "2024-01-17"}
+    },
+    {
+      "pipelineName": "etl_ecommerce_orders",
+      "orderId": "ORD-002",
+      "eventType": "updated",
+      "occurredAt": "2024-01-15T11:30:00Z",
+      "customerId": "CUST-200",
+      "salesChannel": "mobile",
+      "currency": "EUR",
+      "pricing": {"subtotal": 250.0, "tax": 25.0, "discounts": 10.0, "totalAmount": 265.0},
+      "items": [{"sku": "SKU-B", "quantity": 2, "unitPrice": 100.0}, {"sku": "SKU-C", "quantity": 1, "unitPrice": 50.0}],
+      "shipping": {"city": "Berlin", "method": "standard", "promisedDate": "2024-01-22"}
+    },
+    {
+      "pipelineName": "etl_ecommerce_orders",
+      "orderId": "ORD-003",
+      "eventType": "cancelled",
+      "occurredAt": "2024-01-15T14:00:00Z",
+      "customerId": "CUST-300",
+      "salesChannel": "store",
+      "currency": "GBP",
+      "pricing": {"subtotal": 50.0, "tax": 5.0, "discounts": 0.0, "totalAmount": 55.0},
+      "items": [{"sku": "SKU-D", "quantity": 5, "unitPrice": 10.0}],
+      "shipping": {"city": "London", "method": "pickup", "promisedDate": "2024-01-16"}
+    }
+  ],
+  "expectedErrorMessage": ""
+}

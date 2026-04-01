@@ -1,0 +1,17 @@
+{
+  "input": [
+    {
+      "pipelineName": null,
+      "orderId": "ORD-NPN-001",
+      "eventType": "placed",
+      "occurredAt": "2024-02-01T09:00:00Z",
+      "customerId": "CUST-999",
+      "salesChannel": "web",
+      "currency": "USD",
+      "pricing": {"subtotal": 75.0, "tax": 6.0, "discounts": 0.0, "totalAmount": 81.0},
+      "items": [{"sku": "SKU-Z", "quantity": 3, "unitPrice": 25.0}],
+      "shipping": {"city": "Chicago", "method": "standard", "promisedDate": "2024-02-08"}
+    }
+  ],
+  "expectedErrorMessage": ""
+}

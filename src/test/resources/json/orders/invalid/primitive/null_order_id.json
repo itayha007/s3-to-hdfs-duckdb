@@ -1,0 +1,32 @@
+{
+  "input": [
+    {
+      "pipelineName": "etl_ecommerce_orders",
+      "orderId": null,
+      "eventType": "placed",
+      "occurredAt": "2024-02-01T09:00:00Z",
+      "customerId": "CUST-500",
+      "salesChannel": "web",
+      "currency": "USD",
+      "pricing": {
+        "subtotal": 50.0,
+        "tax": 4.0,
+        "discounts": 0.0,
+        "totalAmount": 54.0
+      },
+      "items": [
+        {
+          "sku": "SKU-X",
+          "quantity": 1,
+          "unitPrice": 50.0
+        }
+      ],
+      "shipping": {
+        "city": "Seattle",
+        "method": "standard",
+        "promisedDate": "2024-02-08"
+      }
+    }
+  ],
+  "expectedErrorMessage": "Required field 'orderId' is missing"
+}

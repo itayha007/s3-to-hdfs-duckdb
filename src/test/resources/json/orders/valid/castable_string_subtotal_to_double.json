@@ -1,0 +1,32 @@
+{
+  "input": [
+    {
+      "pipelineName": "etl_ecommerce_orders",
+      "orderId": "ORD-XXX",
+      "eventType": "placed",
+      "occurredAt": "2024-03-01T09:00:00Z",
+      "customerId": "CUST-XXX",
+      "salesChannel": "web",
+      "currency": "USD",
+      "pricing": {
+        "subtotal": "100.0",
+        "tax": 10.0,
+        "discounts": 0.0,
+        "totalAmount": 110.0
+      },
+      "items": [
+        {
+          "sku": "SKU-1",
+          "quantity": 1,
+          "unitPrice": 10.0
+        }
+      ],
+      "shipping": {
+        "city": "Austin",
+        "method": "standard",
+        "promisedDate": "2024-03-08"
+      }
+    }
+  ],
+  "expectedErrorMessage": ""
+}

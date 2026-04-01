@@ -1,0 +1,26 @@
+{
+  "input": [
+    {
+      "pipelineName": "etl_ecommerce_orders",
+      "orderId": "ORD-ITEMS-NULL",
+      "eventType": "placed",
+      "occurredAt": "2024-02-01T09:00:00Z",
+      "customerId": "CUST-600",
+      "salesChannel": "web",
+      "currency": "USD",
+      "pricing": {
+        "subtotal": 20.0,
+        "tax": 2.0,
+        "discounts": 0.0,
+        "totalAmount": 22.0
+      },
+      "items": null,
+      "shipping": {
+        "city": "Boston",
+        "method": "standard",
+        "promisedDate": "2024-02-10"
+      }
+    }
+  ],
+  "expectedErrorMessage": "Required field 'items' is missing"
+}

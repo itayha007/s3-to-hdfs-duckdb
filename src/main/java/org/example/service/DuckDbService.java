@@ -70,9 +70,36 @@ public class DuckDbService {
                 .map(c -> c.getName() + ": '" + c.getDuckDbType() + "'")
                 .collect(Collectors.joining(", ", "{", "}"));
 
-        stmt.execute(String.format(
-                "CREATE TEMP TABLE _staging AS SELECT * FROM read_json('%s', columns=%s, format='auto', maximum_object_size=%d)",
-                s3Uri, columns, duckDbConfig.getMaximumObjectSize()));
+        try {
+            stmt.execute(String.format(
+                    "CREATE TEMP TABLE _staging AS SELECT * FROM read_json('%s', columns=%s, format='auto', maximum_object_size=%d)",
+                    s3Uri, columns, duckDbConfig.getMaximumObjectSize()));
+        } catch (SQLException e) {
+            findAndThrowTypeMismatch(stmt, s3Uri, schema, e);
+        }
+    }
+
+    /**
+     * Called when the full-schema read_json fails. Probes each column individually
+     * to identify which field has the type mismatch, then throws a descriptive error.
+     */
+    private void findAndThrowTypeMismatch(Statement stmt, String s3Uri, PipelineSchema schema, SQLException cause) {
+        for (var col : schema.getColumns()) {
+            String probe = "{" + col.getName() + ": '" + col.getDuckDbType() + "'}";
+            try (ResultSet rs = stmt.executeQuery(String.format(
+                    "SELECT COUNT(*) FROM read_json('%s', columns=%s, format='auto', maximum_object_size=%d)",
+                    s3Uri, probe, duckDbConfig.getMaximumObjectSize()))) {
+                while (rs.next()) {} // force full scan
+            } catch (SQLException fieldError) {
+                throw new IllegalArgumentException(String.format(
+                        "Type mismatch: field '%s' cannot be cast to %s",
+                        col.getName(), col.getDuckDbType()),
+                        fieldError);
+            }
+        }
+        // No individual column was pinpointed — wrap original with context
+        throw new IllegalArgumentException(
+                "Schema validation failed: " + cause.getMessage(), cause);
     }
 
 
@@ -87,7 +114,7 @@ public class DuckDbService {
                 rs.next();
                 if (rs.getLong(1) > 0) {
                     throw new IllegalArgumentException(
-                            "Required field '" + col.getName() + "' is missing or null in " + s3Uri);
+                            "Required field '" + col.getName() + "' is missing");
                 }
             }
         }

@@ -1,0 +1,86 @@
+{
+  "input": [
+    {
+      "pipelineName": "etl_ecommerce_orders",
+      "orderId": "ORD-BATCH-1",
+      "eventType": "placed",
+      "occurredAt": "2024-03-01T09:00:00Z",
+      "customerId": "CUST-A",
+      "salesChannel": "web",
+      "currency": "USD",
+      "pricing": {
+        "subtotal": 10.0,
+        "tax": 1.0,
+        "discounts": 0.0,
+        "totalAmount": 11.0
+      },
+      "items": [
+        {
+          "sku": "SKU-1",
+          "quantity": 1,
+          "unitPrice": 10.0
+        }
+      ],
+      "shipping": {
+        "city": "Austin",
+        "method": "standard",
+        "promisedDate": "2024-03-08"
+      }
+    },
+    {
+      "pipelineName": "etl_ecommerce_orders",
+      "orderId": null,
+      "eventType": "placed",
+      "occurredAt": "2024-03-01T10:00:00Z",
+      "customerId": "CUST-B",
+      "salesChannel": "mobile",
+      "currency": "USD",
+      "pricing": {
+        "subtotal": 20.0,
+        "tax": 2.0,
+        "discounts": 0.0,
+        "totalAmount": 22.0
+      },
+      "items": [
+        {
+          "sku": "SKU-2",
+          "quantity": 2,
+          "unitPrice": 10.0
+        }
+      ],
+      "shipping": {
+        "city": "Portland",
+        "method": "express",
+        "promisedDate": "2024-03-03"
+      }
+    },
+    {
+      "pipelineName": "etl_ecommerce_orders",
+      "orderId": "ORD-BATCH-3",
+      "eventType": "placed",
+      "occurredAt": "2024-03-01T11:00:00Z",
+      "customerId": "CUST-C",
+      "salesChannel": "store",
+      "currency": "USD",
+      "pricing": {
+        "subtotal": 30.0,
+        "tax": 3.0,
+        "discounts": 0.0,
+        "totalAmount": 33.0
+      },
+      "items": [
+        {
+          "sku": "SKU-3",
+          "quantity": 3,
+          "unitPrice": 10.0
+        }
+      ],
+      "shipping": {
+        "city": "Phoenix",
+        "method": "standard",
+        "promisedDate": "2024-03-10"
+      }
+    }
+  ],
+  "expectedErrorMessage": "Required field 'orderId' is missing"
+}
