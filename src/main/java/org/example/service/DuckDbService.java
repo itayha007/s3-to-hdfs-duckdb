@@ -30,16 +30,16 @@ public class DuckDbService {
     private final S3Config s3Config;
 
     public Path convertJsonToParquet(KafkaReference ref, PipelineSchema schema) throws IOException, SQLException {
-        Files.createDirectories(Path.of(duckDbConfig.getProperties().getProperty("temp_directory", "/tmp")));
+        Files.createDirectories(Path.of(duckDbConfig.getProperties().getProperty("temp_directory")));
         Path output = createTempParquetPath();
         String s3Uri  = ref.toS3Uri();
 
         log.info("Converting {} → Parquet [pipeline={}]", s3Uri, schema.getPipelineName());
 
         try (Connection conn = connect(); Statement stmt = conn.createStatement()) {
-            loadFromS3IntoStagingTable(stmt, s3Uri, schema);
-            assertRequiredFieldsPresent(stmt, s3Uri, schema);
-            writeParquet(stmt, output);
+            this.loadFromS3IntoStagingTable(stmt, s3Uri, schema);
+            this.assertRequiredFieldsPresent(stmt, s3Uri, schema);
+            this.writeParquet(stmt, output);
         }
 
         log.info("Parquet written: {} ({} KB)", output, Files.size(output) / 1024);
@@ -73,8 +73,8 @@ public class DuckDbService {
                 .collect(Collectors.joining(", ", "{", "}"));
 
         stmt.execute(String.format(
-                "CREATE TEMP TABLE _staging AS SELECT * FROM read_json('%s', columns=%s, format='auto')",
-                s3Uri, columns));
+                "CREATE TEMP TABLE _staging AS SELECT * FROM read_json('%s', columns=%s, format='auto', maximum_object_size=%d)",
+                s3Uri, columns, duckDbConfig.getMaximumObjectSize()));
     }
 
 

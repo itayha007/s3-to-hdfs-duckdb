@@ -16,6 +16,7 @@ s3:
   path-style-access: true
 
 duckdb:
+  maximum-object-size: 2147483648  # 2 GB
   properties:
     memory_limit: "4GB"
     temp_directory: /tmp/duckdb_tmp

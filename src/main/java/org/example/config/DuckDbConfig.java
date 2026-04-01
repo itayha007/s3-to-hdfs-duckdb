@@ -12,4 +12,5 @@ import java.util.Properties;
 public class DuckDbConfig {
 
     private Properties properties = new Properties();
+    private long maximumObjectSize = 2_147_483_648L; // 2 GB
 }
