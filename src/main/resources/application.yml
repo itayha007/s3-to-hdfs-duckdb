@@ -18,7 +18,7 @@ s3:
 duckdb:
   maximum-object-size: 2147483648  # 2 GB
   properties:
-    memory_limit: "4GB"
+    memory_limit: "16GB"
     temp_directory: /tmp/duckdb_tmp
     threads: "4"
     extension_directory: extensions

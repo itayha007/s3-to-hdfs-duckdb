@@ -51,7 +51,7 @@ public class KafkaConsumerService {
 
         String pipelineName = headers.getPipelineName();
         PipelineSchema schema = schemaService.getSchema(pipelineName);
-        processKey(ref, pipelineName, schema, acknowledgment);
+        this.processKey(ref, pipelineName, schema, acknowledgment);
     }
 
     /**

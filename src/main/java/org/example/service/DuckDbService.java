@@ -14,7 +14,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
-import java.util.Properties;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -37,7 +36,7 @@ public class DuckDbService {
         log.info("Converting {} → Parquet [pipeline={}]", s3Uri, schema.getPipelineName());
 
         try (Connection conn = connect(); Statement stmt = conn.createStatement()) {
-            this.loadFromS3IntoStagingTable(stmt, s3Uri, schema);
+            this.validateSchema(stmt, s3Uri, schema);
             this.assertRequiredFieldsPresent(stmt, s3Uri, schema);
             this.writeParquet(stmt, output);
         }
@@ -66,8 +65,7 @@ public class DuckDbService {
     }
 
 
-    private void loadFromS3IntoStagingTable(Statement stmt, String s3Uri, PipelineSchema schema) throws SQLException {
-
+    private void validateSchema(Statement stmt, String s3Uri, PipelineSchema schema) throws SQLException {
         String columns = schema.getColumns().stream()
                 .map(c -> c.getName() + ": '" + c.getDuckDbType() + "'")
                 .collect(Collectors.joining(", ", "{", "}"));

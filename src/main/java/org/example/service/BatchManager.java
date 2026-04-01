@@ -3,6 +3,7 @@ package org.example.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.example.config.BatchConfig;
+import org.example.service.PipelineBatch.BatchEntry;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -12,15 +13,6 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Buffers small Parquet files per pipeline and flushes them as one merged
- * Parquet to HDFS when either threshold is reached:
- *
- *   - Size:  accumulated Parquet bytes >= batch.max-parquet-bytes (default 128 MB)
- *   - Time:  scheduled flush every batch.flush-interval-ms (default 5 minutes)
- *
- * DuckDB merges the buffered files via read_parquet([...]) in one pass.
- */
 @Log4j2
 @Service
 @RequiredArgsConstructor
@@ -32,12 +24,6 @@ public class BatchManager {
 
     private final ConcurrentHashMap<String, PipelineBatch> batches = new ConcurrentHashMap<>();
 
-    /**
-     * Adds a small Parquet temp file to the pipeline's batch.
-     * BatchManager owns the file and the acknowledgment after this call.
-     * The acknowledgment is committed only after the batch is successfully written to HDFS.
-     * Flushes immediately if the Parquet size threshold is exceeded.
-     */
     public void add(String pipelineName, Path parquetFile, Acknowledgment acknowledgment) throws Exception {
         long size = Files.size(parquetFile);
         PipelineBatch batch = batches.computeIfAbsent(pipelineName, PipelineBatch::new);
@@ -55,43 +41,49 @@ public class BatchManager {
         }
     }
 
-    @Scheduled(fixedDelayString = "${batch.flush-interval-ms:300000}")
+    @Scheduled(fixedDelay = 10_000)
     public void flushAll() {
-        long nonEmpty = batches.values().stream().filter(b -> !b.isEmpty()).count();
-        if (nonEmpty == 0) return;
-        log.info("Scheduled flush: {} pipeline(s) with pending data", nonEmpty);
-        batches.keySet().forEach(this::flushPipeline);
+        long now = System.currentTimeMillis();
+        List<String> due = batches.entrySet().stream()
+                .filter(e -> !e.getValue().isEmpty())
+                .filter(e -> now - e.getValue().getLastFlushedAt() >= batchConfig.getFlushIntervalMs())
+                .map(java.util.Map.Entry::getKey)
+                .collect(java.util.stream.Collectors.toList());
+
+        if (due.isEmpty()) return;
+        log.info("Scheduled flush: {} pipeline(s) due", due.size());
+        due.forEach(this::flushPipeline);
     }
 
     private void flushPipeline(String pipelineName) {
         PipelineBatch batch = batches.get(pipelineName);
         if (batch == null) return;
 
-        List<Path> files;
-        List<Acknowledgment> acks;
+        List<BatchEntry> entries;
         synchronized (batch) {
             if (batch.isEmpty()) return;
-            files = batch.drainFiles();
-            acks = batch.drainAcks();
+            entries = batch.drain();
         }
 
-        long totalMb = files.stream().mapToLong(f -> {
-            try { return Files.size(f); } catch (Exception e) { return 0L; }
-        }).sum() / (1024 * 1024);
         log.info("Flushing pipeline '{}': {} Parquet file(s), ~{} MB total",
-                pipelineName, files.size(), totalMb);
+                pipelineName, entries.size(),
+                entries.stream().mapToLong(BatchEntry::getBytes).sum() / (1024 * 1024));
 
         Path mergedParquet = null;
         try {
+            List<Path> files = entries.stream()
+                    .map(BatchEntry::getPath)
+                    .collect(java.util.stream.Collectors.toList());
             mergedParquet = duckDbService.mergeParquets(files);
             hdfsWriterService.writeToHdfs(mergedParquet, pipelineName);
-            // Acknowledge only after data is safely on HDFS
-            acks.forEach(Acknowledgment::acknowledge);
+            entries.stream()
+                    .map(BatchEntry::getAck)
+                    .forEach(Acknowledgment::acknowledge);
         } catch (Exception e) {
             log.error("Failed to flush pipeline '{}' — {} message(s) will be redelivered on restart",
-                    pipelineName, acks.size(), e);
+                    pipelineName, entries.size(), e);
         } finally {
-            files.forEach(this::deleteSilently);
+            entries.stream().map(BatchEntry::getPath).forEach(this::deleteSilently);
             if (mergedParquet != null) deleteSilently(mergedParquet);
         }
     }
