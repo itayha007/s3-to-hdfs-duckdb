@@ -77,6 +77,7 @@ public class DuckDbService {
                 s3Uri, columns));
     }
 
+
     private void assertRequiredFieldsPresent(Statement stmt, String s3Uri, PipelineSchema schema)
             throws SQLException {
 
