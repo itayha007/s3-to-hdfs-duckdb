@@ -101,7 +101,7 @@ public class DuckDbService {
     }
 
     private Connection connect() throws SQLException {
-        Connection conn = DriverManager.getConnection("jdbc:duckdb:", duckDbConfig.getProperties());
+        Connection conn = DriverManager.getConnection("jdbc:duckdb:", this.duckDbConfig.getProperties());
         try (Statement stmt = conn.createStatement()) {
             stmt.execute("LOAD httpfs");
             configureS3(stmt);
@@ -110,7 +110,7 @@ public class DuckDbService {
     }
 
     private void configureS3(Statement stmt) throws SQLException {
-        URI endpoint = URI.create(s3Config.getEndpoint());
+        URI endpoint = URI.create(this.s3Config.getEndpoint());
         stmt.execute(String.format(
                 "CREATE OR REPLACE SECRET (" +
                 "  TYPE '%s', KEY_ID '%s', SECRET '%s'," +
