@@ -30,9 +30,6 @@ public class DuckDbService {
     private final DuckDbConfig duckDbConfig;
     private final S3Config s3Config;
 
-    /**
-     * Converts JSON from S3 to a local Parquet file with schema enforcement and validation.
-     */
     public Path convertJsonToParquet(KafkaReference ref, PipelineSchema schema) throws IOException, SQLException {
         String tempDir = duckDbConfig.getProperties().getProperty("temp_directory", "/tmp");
         Files.createDirectories(Path.of(tempDir));
@@ -43,13 +40,8 @@ public class DuckDbService {
         log.info("Converting {} -> Parquet [pipeline={}]", s3Uri, schema.getPipelineName());
 
         try (Connection conn = connect(); Statement stmt = conn.createStatement()) {
-            // 1. Load data into a staging table using the explicit schema
             this.loadFromS3IntoRawStagingTable(stmt, s3Uri, schema);
-
-            // 2. Validate that required fields do not contain NULLs
             this.validateRequiredFields(stmt, schema);
-
-            // 3. Write validated data to Parquet
             this.writeParquet(stmt, output);
         }
 
@@ -66,45 +58,40 @@ public class DuckDbService {
         log.info("Merging {} Parquet file(s) -> {}", files.size(), output);
 
         String fileList = files.stream()
-                .map(path -> "'" + escapeSqlString(path.toAbsolutePath().toString()) + "'")
+                .map(path -> String.format("'%s'", path.toAbsolutePath()))
                 .collect(Collectors.joining(", ", "[", "]"));
 
         try (Connection conn = connect(); Statement stmt = conn.createStatement()) {
             stmt.execute(String.format(
                     "COPY (SELECT * FROM read_parquet(%s)) TO '%s' (FORMAT PARQUET, COMPRESSION SNAPPY)",
                     fileList,
-                    escapeSqlString(output.toAbsolutePath().toString())));
+                    output.toAbsolutePath()));
         }
 
         return output;
     }
 
     private void loadFromS3IntoRawStagingTable(Statement stmt, String s3Uri, PipelineSchema schema) throws SQLException {
-        // Build the DuckDB column mapping: {col1: 'TYPE', col2: 'TYPE'}
         String columnsDefinition = schema.getColumns().stream()
                 .map(col -> String.format("'%s': '%s'", col.getName(), col.getDuckDbType()))
                 .collect(Collectors.joining(", ", "{", "}"));
 
         stmt.execute("DROP TABLE IF EXISTS _staging");
-
-        // read_json with 'columns' enforces type casting and ignores fields not in the schema
         try {
             stmt.execute(String.format(
                     "CREATE TEMP TABLE _staging AS " +
                             "SELECT * FROM read_json('%s', format='auto', columns=%s)",
-                    escapeSqlString(s3Uri),
+                    s3Uri,
                     columnsDefinition));
         }catch (SQLException e){
-            throw new IllegalStateException(e.getMessage());
+            throw new IllegalArgumentException(e.getMessage());
         }
     }
 
     private void validateRequiredFields(Statement stmt, PipelineSchema schema) throws SQLException {
         for (ColumnDefinition col : schema.getColumns()) {
             if (!col.isNullable()) {
-                String quotedColumn = quoteIdentifier(col.getName());
-                String checkQuery = String.format("SELECT 1 FROM _staging WHERE %s IS NULL LIMIT 1", quotedColumn);
-
+                String checkQuery = String.format("SELECT 1 FROM _staging WHERE %s IS NULL LIMIT 1", col.getName());
                 if (exists(stmt, checkQuery)) {
                     throw new IllegalArgumentException(
                             String.format("Required field '%s' is missing or null",
@@ -117,7 +104,7 @@ public class DuckDbService {
     private void writeParquet(Statement stmt, Path output) throws SQLException {
         stmt.execute(String.format(
                 "COPY (SELECT * FROM _staging) TO '%s' (FORMAT PARQUET, COMPRESSION SNAPPY)",
-                escapeSqlString(output.toAbsolutePath().toString())));
+                output.toAbsolutePath()));
     }
 
     private Connection connect() throws SQLException {
@@ -144,12 +131,12 @@ public class DuckDbService {
                         "USE_SSL %s, " +
                         "URL_STYLE '%s'" +
                         ")",
-                escapeSqlString(this.s3Config.getAccessKey()),
-                escapeSqlString(this.s3Config.getSecretKey()),
-                escapeSqlString(this.s3Config.getRegion()),
-                escapeSqlString(endpoint.getHost()),
+                this.s3Config.getAccessKey(),
+                this.s3Config.getSecretKey(),
+                this.s3Config.getRegion(),
+                endpoint.getHost(),
                 endpoint.getPort(),
-                Boolean.toString("https".equalsIgnoreCase(endpoint.getScheme())),
+                "https".equalsIgnoreCase(endpoint.getScheme()),
                 this.s3Config.isPathStyleAccess() ? "path" : "vhost"));
     }
 
@@ -159,17 +146,9 @@ public class DuckDbService {
         }
     }
 
-    private String quoteIdentifier(String identifier) {
-        return "\"" + identifier.replace("\"", "\"\"") + "\"";
-    }
-
     private Path createTempParquetPath() throws IOException {
         Path path = Files.createTempFile("duckdb-", ".parquet");
         Files.delete(path);
         return path;
-    }
-
-    private String escapeSqlString(String value) {
-        return value == null ? "" : value.replace("'", "''");
     }
 }
