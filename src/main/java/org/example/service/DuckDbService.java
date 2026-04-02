@@ -75,8 +75,6 @@ public class DuckDbService {
         String columnsDefinition = schema.getColumns().stream()
                 .map(col -> String.format("'%s': '%s'", col.getName(), col.getDuckDbType()))
                 .collect(Collectors.joining(", ", "{", "}"));
-
-        stmt.execute("DROP TABLE IF EXISTS _staging");
         try {
             stmt.execute(String.format(
                     "CREATE TEMP TABLE _staging AS " +
@@ -122,15 +120,7 @@ public class DuckDbService {
     private void configureS3(Statement stmt) throws SQLException {
         URI endpoint = URI.create(this.s3Config.getEndpoint());
         stmt.execute(String.format(
-                "CREATE OR REPLACE SECRET (" +
-                        "TYPE 'S3', " +
-                        "KEY_ID '%s', " +
-                        "SECRET '%s', " +
-                        "REGION '%s', " +
-                        "ENDPOINT '%s:%d', " +
-                        "USE_SSL %s, " +
-                        "URL_STYLE '%s'" +
-                        ")",
+                "CREATE OR REPLACE SECRET (TYPE 'S3', KEY_ID '%s',SECRET '%s', REGION '%s', ENDPOINT '%s:%d', USE_SSL %s, URL_STYLE '%s')",
                 this.s3Config.getAccessKey(),
                 this.s3Config.getSecretKey(),
                 this.s3Config.getRegion(),
