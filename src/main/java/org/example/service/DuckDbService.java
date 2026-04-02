@@ -2,6 +2,7 @@ package org.example.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
+import org.apache.kafka.common.protocol.types.Field;
 import org.example.config.DuckDbConfig;
 import org.example.config.S3Config;
 import org.example.model.ColumnDefinition;
@@ -84,7 +85,7 @@ public class DuckDbService {
         for (ColumnDefinition col : schema.getColumns()) {
             if (!col.isNullable()) {
                 String quotedColumn = quoteIdentifier(col.getName());
-                if (exists(stmt, "SELECT 1 FROM _staging WHERE " + quotedColumn + " IS NULL LIMIT 1")) {
+                if (exists(stmt, String.format("SELECT 1 FROM _staging WHERE %s IS NULL LIMIT 1", quotedColumn))) {
                     throw new IllegalArgumentException(
                             String.format("Required field '%s' is missing or null", col.getName()));
                 }
@@ -94,23 +95,19 @@ public class DuckDbService {
 
     private void createTypedTable(Statement stmt, PipelineSchema schema) throws SQLException {
         stmt.execute("DROP TABLE IF EXISTS _typed");
-
         String typedProjection = schema.getColumns().stream()
                 .map(col -> {
                     String quotedColumn = quoteIdentifier(col.getName());
-                    return "CAST(" + quotedColumn + " AS " + col.getDuckDbType() + ") AS " + quotedColumn;
+                    return String.format("CAST(%s AS %s) AS %s", quotedColumn,  col.getDuckDbType(), quotedColumn);
                 })
                 .collect(Collectors.joining(", "));
 
         try {
-            stmt.execute("CREATE TEMP TABLE _typed AS SELECT " + typedProjection + " FROM _staging");
+            stmt.execute(String.format("CREATE TEMP TABLE _typed AS SELECT %s FROM _staging", typedProjection));
         } catch (SQLException e) {
-            throw new IllegalArgumentException(
-                    e.getMessage()
-            );
+            throw new IllegalArgumentException(e.getMessage());
         }
     }
-
     private boolean exists(Statement stmt, String sql) throws SQLException {
         try (ResultSet rs = stmt.executeQuery(sql)) {
             return rs.next();
