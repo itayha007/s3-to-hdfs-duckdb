@@ -1,0 +1,17 @@
+{
+  "input": [
+    {
+      "pipelineName": "etl_ecommerce_orders",
+      "orderId": "ORD-BAD-BOOL",
+      "eventType": "placed",
+      "occurredAt": "2024-03-01T09:00:00Z",
+      "customerId": "CUST-BAD",
+      "salesChannel": "web",
+      "currency": "USD",
+      "pricing": {"subtotal": 10.0, "tax": 1.0, "discounts": 0.0, "totalAmount": 11.0},
+      "items": [{"sku": "SKU-BAD", "quantity": 1, "unitPrice": 10.0, "isOnSale": "not-a-bool"}],
+      "shipping": {"city": "Austin", "method": "standard", "promisedDate": "2024-03-08"}
+    }
+  ],
+  "expectedErrorMessage": "Could not convert string 'not-a-bool'"
+}

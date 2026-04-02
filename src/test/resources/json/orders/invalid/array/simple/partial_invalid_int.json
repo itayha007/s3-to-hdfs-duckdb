@@ -1,0 +1,18 @@
+{
+  "input": [
+    {
+      "pipelineName": "etl_ecommerce_orders",
+      "orderId": "ORD-TAG-PARTIAL",
+      "eventType": "placed",
+      "occurredAt": "2024-03-01T09:00:00Z",
+      "customerId": "CUST-BAD",
+      "salesChannel": "web",
+      "currency": "USD",
+      "pricing": {"subtotal": 10.0, "tax": 1.0, "discounts": 0.0, "totalAmount": 11.0},
+      "items": [{"sku": "SKU-1", "quantity": 1, "unitPrice": 10.0}],
+      "shipping": {"city": "Austin", "method": "standard", "promisedDate": "2024-03-08"},
+      "tagIds": [1, "not-an-int"]
+    }
+  ],
+  "expectedErrorMessage": "Could not convert string 'not-an-int' to INT32"
+}

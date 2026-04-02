@@ -1,0 +1,17 @@
+{
+  "input": [
+    {
+      "pipelineName": "etl_ecommerce_orders",
+      "orderId": "ORD-BAD-TAX",
+      "eventType": "placed",
+      "occurredAt": "2024-02-01T09:00:00Z",
+      "customerId": "CUST-700",
+      "salesChannel": "web",
+      "currency": "USD",
+      "pricing": {"subtotal": 100.0, "tax": "not-a-number", "discounts": 0.0, "totalAmount": 110.0},
+      "items": [{"sku": "SKU-1", "quantity": 1, "unitPrice": 100.0}],
+      "shipping": {"city": "Denver", "method": "standard", "promisedDate": "2024-02-10"}
+    }
+  ],
+  "expectedErrorMessage": "Conversion Error: Could not convert string 'not-a-number' to DOUBLE"
+}

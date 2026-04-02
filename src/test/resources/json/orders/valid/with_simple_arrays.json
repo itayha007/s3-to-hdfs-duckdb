@@ -1,0 +1,21 @@
+{
+  "input": [
+    {
+      "pipelineName": "etl_ecommerce_orders",
+      "orderId": "ORD-ARRAYS-001",
+      "eventType": "placed",
+      "occurredAt": "2024-01-15T10:00:00Z",
+      "customerId": "CUST-123",
+      "salesChannel": "web",
+      "currency": "USD",
+      "pricing": {"subtotal": 100.0, "tax": 10.0, "discounts": 5.0, "totalAmount": 105.0},
+      "items": [{"sku": "SKU-A", "quantity": 2, "unitPrice": 50.0}],
+      "shipping": {"city": "New York", "method": "standard", "promisedDate": "2024-01-20"},
+      "tagIds": [10, 20, 30],
+      "discountRates": [0.05, 0.10],
+      "loyaltyPoints": [500, 1000, 2000],
+      "promoFlags": [true, false, true]
+    }
+  ],
+  "expectedErrorMessage": ""
+}
