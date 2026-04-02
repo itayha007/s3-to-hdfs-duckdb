@@ -28,5 +28,5 @@
       }
     }
   ],
-  "expectedErrorMessage": "Type mismatch: field 'pricing' cannot be cast to STRUCT(subtotal DOUBLE, tax DOUBLE, discounts DOUBLE, totalAmount DOUBLE)"
+  "expectedErrorMessage": "field 'subtotal' with value: 'not-a-number' can not be casted to double"
 }

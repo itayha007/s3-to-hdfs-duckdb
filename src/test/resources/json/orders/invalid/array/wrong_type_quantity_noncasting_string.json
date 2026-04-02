@@ -28,5 +28,5 @@
       }
     }
   ],
-  "expectedErrorMessage": "Type mismatch: field 'items' cannot be cast to STRUCT(sku VARCHAR, quantity INTEGER, unitPrice DOUBLE)[]"
+  "expectedErrorMessage": "field 'quantity' with value: 'not-an-int' can not be casted to int"
 }
