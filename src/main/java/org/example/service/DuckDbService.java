@@ -31,19 +31,17 @@ public class DuckDbService {
     private final S3Config s3Config;
 
     public Path convertJsonToParquet(KafkaReference ref, PipelineSchema schema) throws IOException, SQLException {
-        Files.createDirectories(Path.of(
-                duckDbConfig.getProperties().getProperty("temp_directory", "/tmp")));
-
+        Files.createDirectories(Path.of(duckDbConfig.getProperties().getProperty("temp_directory", "/tmp")));
         Path output = createTempParquetPath();
         String s3Uri = ref.toS3Uri();
 
         log.info("Converting {} -> Parquet [pipeline={}]", s3Uri, schema.getPipelineName());
 
         try (Connection conn = connect(); Statement stmt = conn.createStatement()) {
-            loadFromS3IntoRawStagingTable(stmt, s3Uri);
-            validateRequiredFields(stmt, schema);
-            createTypedTable(stmt, schema);
-            writeParquet(stmt, output);
+            this.loadFromS3IntoRawStagingTable(stmt, s3Uri);
+            this.validateRequiredFields(stmt, schema);
+            this.createTypedTable(stmt, schema);
+            this.writeParquet(stmt, output);
         }
 
         log.info("Parquet written: {} ({} KB)", output, Files.size(output) / 1024);
