@@ -19,8 +19,10 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Log4j2
@@ -95,10 +97,27 @@ public class DuckDbService {
 
     private void createTypedTable(Statement stmt, PipelineSchema schema) throws SQLException {
         stmt.execute("DROP TABLE IF EXISTS _typed");
+        Set<String> stagingColumns = getStagingColumns(stmt);
+
         String typedProjection = schema.getColumns().stream()
                 .map(col -> {
                     String quotedColumn = quoteIdentifier(col.getName());
-                    return String.format("CAST(%s AS %s) AS %s", quotedColumn,  col.getDuckDbType(), quotedColumn);
+                    String duckDbType = col.getDuckDbType();
+
+                    if (!stagingColumns.contains(col.getName())) {
+                        return String.format("CAST(NULL AS %s) AS %s", duckDbType, quotedColumn);
+                    }
+
+                    boolean isComplex = duckDbType.startsWith("STRUCT")
+                            || duckDbType.endsWith("[]")
+                            || duckDbType.startsWith("MAP");
+
+                    if (isComplex) {
+                        return String.format("CAST(CAST(%s AS JSON) AS %s) AS %s",
+                                quotedColumn, duckDbType, quotedColumn);
+                    }
+
+                    return String.format("CAST(%s AS %s) AS %s", quotedColumn, duckDbType, quotedColumn);
                 })
                 .collect(Collectors.joining(", "));
 
@@ -108,6 +127,17 @@ public class DuckDbService {
             throw new IllegalArgumentException(e.getMessage());
         }
     }
+
+    private Set<String> getStagingColumns(Statement stmt) throws SQLException {
+        Set<String> columns = new HashSet<>();
+        try (ResultSet rs = stmt.executeQuery("SELECT column_name FROM (DESCRIBE _staging)")) {
+            while (rs.next()) {
+                columns.add(rs.getString("column_name"));
+            }
+        }
+        return columns;
+    }
+
     private boolean exists(Statement stmt, String sql) throws SQLException {
         try (ResultSet rs = stmt.executeQuery(sql)) {
             return rs.next();
