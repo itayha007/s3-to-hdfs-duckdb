@@ -2,7 +2,6 @@ package org.example.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
-import org.apache.kafka.common.protocol.types.Field;
 import org.example.config.DuckDbConfig;
 import org.example.config.S3Config;
 import org.example.model.ColumnDefinition;
@@ -19,10 +18,8 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 @Log4j2
@@ -33,17 +30,26 @@ public class DuckDbService {
     private final DuckDbConfig duckDbConfig;
     private final S3Config s3Config;
 
+    /**
+     * Converts JSON from S3 to a local Parquet file with schema enforcement and validation.
+     */
     public Path convertJsonToParquet(KafkaReference ref, PipelineSchema schema) throws IOException, SQLException {
-        Files.createDirectories(Path.of(duckDbConfig.getProperties().getProperty("temp_directory", "/tmp")));
+        String tempDir = duckDbConfig.getProperties().getProperty("temp_directory", "/tmp");
+        Files.createDirectories(Path.of(tempDir));
+
         Path output = createTempParquetPath();
         String s3Uri = ref.toS3Uri();
 
         log.info("Converting {} -> Parquet [pipeline={}]", s3Uri, schema.getPipelineName());
 
         try (Connection conn = connect(); Statement stmt = conn.createStatement()) {
-            this.loadFromS3IntoRawStagingTable(stmt, s3Uri);
+            // 1. Load data into a staging table using the explicit schema
+            this.loadFromS3IntoRawStagingTable(stmt, s3Uri, schema);
+
+            // 2. Validate that required fields do not contain NULLs
             this.validateRequiredFields(stmt, schema);
-            this.createTypedTable(stmt, schema);
+
+            // 3. Write validated data to Parquet
             this.writeParquet(stmt, output);
         }
 
@@ -57,7 +63,6 @@ public class DuckDbService {
         }
 
         Path output = createTempParquetPath();
-
         log.info("Merging {} Parquet file(s) -> {}", files.size(), output);
 
         String fileList = files.stream()
@@ -71,82 +76,47 @@ public class DuckDbService {
                     escapeSqlString(output.toAbsolutePath().toString())));
         }
 
-        log.info("Merged Parquet written: {} ({} KB)", output, Files.size(output) / 1024);
         return output;
     }
 
-    private void loadFromS3IntoRawStagingTable(Statement stmt, String s3Uri) throws SQLException {
+    private void loadFromS3IntoRawStagingTable(Statement stmt, String s3Uri, PipelineSchema schema) throws SQLException {
+        // Build the DuckDB column mapping: {col1: 'TYPE', col2: 'TYPE'}
+        String columnsDefinition = schema.getColumns().stream()
+                .map(col -> String.format("'%s': '%s'", col.getName(), col.getDuckDbType()))
+                .collect(Collectors.joining(", ", "{", "}"));
+
         stmt.execute("DROP TABLE IF EXISTS _staging");
-        stmt.execute(String.format(
-                "CREATE TEMP TABLE _staging AS " +
-                        "SELECT * FROM read_json('%s', format='auto')",
-                escapeSqlString(s3Uri)));
+
+        // read_json with 'columns' enforces type casting and ignores fields not in the schema
+        try {
+            stmt.execute(String.format(
+                    "CREATE TEMP TABLE _staging AS " +
+                            "SELECT * FROM read_json('%s', format='auto', columns=%s)",
+                    escapeSqlString(s3Uri),
+                    columnsDefinition));
+        }catch (SQLException e){
+            throw new IllegalStateException(e.getMessage());
+        }
     }
 
     private void validateRequiredFields(Statement stmt, PipelineSchema schema) throws SQLException {
         for (ColumnDefinition col : schema.getColumns()) {
             if (!col.isNullable()) {
                 String quotedColumn = quoteIdentifier(col.getName());
-                if (exists(stmt, String.format("SELECT 1 FROM _staging WHERE %s IS NULL LIMIT 1", quotedColumn))) {
+                String checkQuery = String.format("SELECT 1 FROM _staging WHERE %s IS NULL LIMIT 1", quotedColumn);
+
+                if (exists(stmt, checkQuery)) {
                     throw new IllegalArgumentException(
-                            String.format("Required field '%s' is missing or null", col.getName()));
+                            String.format("Required field '%s' is missing or null",
+                                    col.getName()));
                 }
             }
         }
     }
 
-    private void createTypedTable(Statement stmt, PipelineSchema schema) throws SQLException {
-        stmt.execute("DROP TABLE IF EXISTS _typed");
-        Set<String> stagingColumns = getStagingColumns(stmt);
-
-        String typedProjection = schema.getColumns().stream()
-                .map(col -> {
-                    String quotedColumn = quoteIdentifier(col.getName());
-                    String duckDbType = col.getDuckDbType();
-
-                    if (!stagingColumns.contains(col.getName())) {
-                        return String.format("CAST(NULL AS %s) AS %s", duckDbType, quotedColumn);
-                    }
-
-                    boolean isComplex = duckDbType.startsWith("STRUCT")
-                            || duckDbType.endsWith("[]")
-                            || duckDbType.startsWith("MAP");
-
-                    if (isComplex) {
-                        return String.format("CAST(CAST(%s AS JSON) AS %s) AS %s",
-                                quotedColumn, duckDbType, quotedColumn);
-                    }
-
-                    return String.format("CAST(%s AS %s) AS %s", quotedColumn, duckDbType, quotedColumn);
-                })
-                .collect(Collectors.joining(", "));
-
-        try {
-            stmt.execute(String.format("CREATE TEMP TABLE _typed AS SELECT %s FROM _staging", typedProjection));
-        } catch (SQLException e) {
-            throw new IllegalArgumentException(e.getMessage());
-        }
-    }
-
-    private Set<String> getStagingColumns(Statement stmt) throws SQLException {
-        Set<String> columns = new HashSet<>();
-        try (ResultSet rs = stmt.executeQuery("SELECT column_name FROM (DESCRIBE _staging)")) {
-            while (rs.next()) {
-                columns.add(rs.getString("column_name"));
-            }
-        }
-        return columns;
-    }
-
-    private boolean exists(Statement stmt, String sql) throws SQLException {
-        try (ResultSet rs = stmt.executeQuery(sql)) {
-            return rs.next();
-        }
-    }
-
     private void writeParquet(Statement stmt, Path output) throws SQLException {
         stmt.execute(String.format(
-                "COPY (SELECT * FROM _typed) TO '%s' (FORMAT PARQUET, COMPRESSION SNAPPY)",
+                "COPY (SELECT * FROM _staging) TO '%s' (FORMAT PARQUET, COMPRESSION SNAPPY)",
                 escapeSqlString(output.toAbsolutePath().toString())));
     }
 
@@ -159,16 +129,14 @@ public class DuckDbService {
             stmt.execute("LOAD httpfs");
             configureS3(stmt);
         }
-
         return conn;
     }
 
     private void configureS3(Statement stmt) throws SQLException {
         URI endpoint = URI.create(this.s3Config.getEndpoint());
-
         stmt.execute(String.format(
                 "CREATE OR REPLACE SECRET (" +
-                        "TYPE '%s', " +
+                        "TYPE 'S3', " +
                         "KEY_ID '%s', " +
                         "SECRET '%s', " +
                         "REGION '%s', " +
@@ -176,7 +144,6 @@ public class DuckDbService {
                         "USE_SSL %s, " +
                         "URL_STYLE '%s'" +
                         ")",
-                "s3",
                 escapeSqlString(this.s3Config.getAccessKey()),
                 escapeSqlString(this.s3Config.getSecretKey()),
                 escapeSqlString(this.s3Config.getRegion()),
@@ -186,17 +153,23 @@ public class DuckDbService {
                 this.s3Config.isPathStyleAccess() ? "path" : "vhost"));
     }
 
-    private Path createTempParquetPath() throws IOException {
-        Path path = Files.createTempFile("duckdb-", ".parquet");
-        Files.delete(path);
-        return path;
+    private boolean exists(Statement stmt, String query) throws SQLException {
+        try (ResultSet rs = stmt.executeQuery(query)) {
+            return rs.next();
+        }
     }
 
     private String quoteIdentifier(String identifier) {
         return "\"" + identifier.replace("\"", "\"\"") + "\"";
     }
 
+    private Path createTempParquetPath() throws IOException {
+        Path path = Files.createTempFile("duckdb-", ".parquet");
+        Files.delete(path);
+        return path;
+    }
+
     private String escapeSqlString(String value) {
-        return value.replace("'", "''");
+        return value == null ? "" : value.replace("'", "''");
     }
 }
