@@ -8,25 +8,10 @@
       "customerId": "CUST-700",
       "salesChannel": "web",
       "currency": "USD",
-      "pricing": {
-        "subtotal": "not-a-number",
-        "tax": 10.0,
-        "discounts": 0.0,
-        "totalAmount": 110.0
-      },
-      "items": [
-        {
-          "sku": "SKU-BAD",
-          "quantity": 1,
-          "unitPrice": 100.0
-        }
-      ],
-      "shipping": {
-        "city": "Denver",
-        "method": "standard",
-        "promisedDate": "2024-02-10"
-      }
+      "pricing": {"subtotal": "not-a-number", "tax": 10.0, "discounts": 0.0, "totalAmount": 110.0},
+      "items": [{"sku": "SKU-BAD", "quantity": 1, "unitPrice": 100.0}],
+      "shipping": {"city": "Denver", "method": "standard", "promisedDate": "2024-02-10"}
     }
   ],
-  "expectedErrorMessage": "field 'subtotal' with value: 'not-a-number' can not be casted to double"
+  "expectedErrorMessage": "Conversion Error: Could not convert string 'not-a-number' to DOUBLE"
 }

@@ -8,19 +8,8 @@
       "customerId": "CUST-XXX",
       "salesChannel": "web",
       "currency": "USD",
-      "pricing": {
-        "subtotal": 10.0,
-        "tax": 1.0,
-        "discounts": 0.0,
-        "totalAmount": 11.0
-      },
-      "items": [
-        {
-          "sku": "SKU-1",
-          "quantity": 1,
-          "unitPrice": 10.0
-        }
-      ],
+      "pricing": {"subtotal": 10.0, "tax": 1.0, "discounts": 0.0, "totalAmount": 11.0},
+      "items": [{"sku": "SKU-1", "quantity": 1, "unitPrice": 10.0}],
       "shipping": null
     }
   ],

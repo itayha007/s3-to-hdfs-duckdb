@@ -9,18 +9,8 @@
       "salesChannel": "web",
       "currency": "USD",
       "pricing": null,
-      "items": [
-        {
-          "sku": "SKU-1",
-          "quantity": 1,
-          "unitPrice": 10.0
-        }
-      ],
-      "shipping": {
-        "city": "Austin",
-        "method": "standard",
-        "promisedDate": "2024-03-08"
-      }
+      "items": [{"sku": "SKU-1", "quantity": 1, "unitPrice": 10.0}],
+      "shipping": {"city": "Austin", "method": "standard", "promisedDate": "2024-03-08"}
     }
   ],
   "expectedErrorMessage": "Required field 'pricing' is missing"

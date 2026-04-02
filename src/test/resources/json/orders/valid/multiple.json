@@ -21,7 +21,10 @@
       "salesChannel": "mobile",
       "currency": "EUR",
       "pricing": {"subtotal": 250.0, "tax": 25.0, "discounts": 10.0, "totalAmount": 265.0},
-      "items": [{"sku": "SKU-B", "quantity": 2, "unitPrice": 100.0}, {"sku": "SKU-C", "quantity": 1, "unitPrice": 50.0}],
+      "items": [
+        {"sku": "SKU-B", "quantity": 2, "unitPrice": 100.0},
+        {"sku": "SKU-C", "quantity": 1, "unitPrice": 50.0}
+      ],
       "shipping": {"city": "Berlin", "method": "standard", "promisedDate": "2024-01-22"}
     },
     {

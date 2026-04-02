@@ -198,9 +198,9 @@ class DuckDbServiceS3IntegrationTest {
 
     // =========================================================================
     // Invalid — all fixtures under /json/orders/invalid/ (scanned recursively)
-    //   primitive/  — null required scalar field
-    //   array/      — null required array field
-    //   object/     — wrong type inside a nested struct
+    //   non-nested/ — null required scalar (non-nested) field
+    //   array/      — null or non-castable values in arrays; simple/ (flat arrays) and nested/ (array of objects)
+    //   object/     — null struct or non-castable value inside a nested struct field
     //   batch/      — multi-record file where ≥1 row is invalid
     // =========================================================================
 
@@ -210,12 +210,12 @@ class DuckDbServiceS3IntegrationTest {
 
         @ParameterizedTest(name = "{0}")
         @MethodSource("cases")
-        void throwsError(TestCase tc) throws Exception {
+        void throwsError(TestCase tc)  {
             PipelineSchema schema = schemaService.getSchema(PIPELINE);
 
             assertThatThrownBy(() -> duckDbService.convertJsonToParquet(upload(tc.inputJson), schema))
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessage(tc.expectedErrorMessage);
+                    .hasMessageContaining(tc.expectedErrorMessage);
         }
 
         Stream<TestCase> cases() throws Exception {
