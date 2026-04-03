@@ -5,8 +5,7 @@ spring:
 kafka:
   bootstrap-servers: localhost:9092
   group-id: s3-to-hdfs-consumer
-  topic: etl.ecommerce.orders
-  concurrency: 1
+  topic-pattern: "etl.*"
 
 s3:
   endpoint: http://localhost:4566
@@ -26,10 +25,13 @@ duckdb:
 hdfs:
   namenode: hdfs://localhost:8020
   output-base-path: /data
+  flink-output-path: hdfs://localhost:8020/flink/output
+  size-threshold-mb: 128        # compact when accumulated Parquet files reach this size
+  compact-on-checkpoint: 2      # also compact every N checkpoints
 
-batch:
-  max-parquet-bytes: 134217728  # 128 MB — flush when buffered Parquet files reach this size
-  flush-interval-ms: 60000     # 5 minutes — flush regardless of size
+flink:
+  checkpoint-interval-ms: 60000  # checkpoint every 60 seconds
+  parallelism: 4
 
 logging:
   config: classpath:log4j2.xml

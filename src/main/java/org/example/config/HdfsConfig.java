@@ -15,6 +15,9 @@ public class HdfsConfig {
 
     private String namenode = "hdfs://localhost:8020";
     private String outputBasePath = "/data";
+    private String flinkOutputPath = "hdfs://localhost:8020/flink/output";
+    private long sizeThresholdMb = 128;
+    private int compactOnCheckpoint = 2;
 
     @Bean
     public FileSystem hdfsFileSystem() throws IOException {

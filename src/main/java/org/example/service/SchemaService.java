@@ -5,6 +5,7 @@ import org.apache.avro.Schema;
 import org.example.model.PipelineSchema;
 import org.springframework.stereotype.Service;
 
+import java.io.Serializable;
 import java.util.Map;
 
 /**
@@ -18,7 +19,7 @@ import java.util.Map;
  */
 @Log4j2
 @Service
-public class SchemaService {
+public class SchemaService implements Serializable {
 
     public PipelineSchema getSchema(String pipelineName) {
         Schema avro = AVRO_SCHEMAS.get(pipelineName);
@@ -26,6 +27,14 @@ public class SchemaService {
             throw new IllegalArgumentException("No schema registered for pipeline: " + pipelineName);
         }
         return AvroToDuckDbConverter.convert(pipelineName, avro);
+    }
+
+    public Schema getFinalSchemaByPipelineName(String pipelineName) {
+        Schema schema = AVRO_SCHEMAS.get(pipelineName);
+        if (schema == null) {
+            throw new IllegalArgumentException("No schema registered for pipeline: " + pipelineName);
+        }
+        return schema;
     }
 
     // -------------------------------------------------------------------------
