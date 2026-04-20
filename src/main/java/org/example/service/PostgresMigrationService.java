@@ -8,8 +8,11 @@ import org.springframework.stereotype.Service;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Properties;
 
 /**
@@ -72,12 +75,39 @@ public class PostgresMigrationService {
     private void copyTable(Statement stmt,
                            String sourceSchema, String targetSchema,
                            String tableName) throws SQLException {
-        long rows = countRows(stmt, sourceSchema, tableName);
-        log.info("Inserting {} row(s) into target table '{}'", rows, tableName);
-
+        log.info("Loading table '{}' into DuckDB memory", tableName);
         stmt.execute(String.format(
-                "INSERT INTO target_db.%s.%s SELECT * FROM source_db.%s.%s",
-                targetSchema, tableName, sourceSchema, tableName));
+                "CREATE TABLE mem_%s AS SELECT * FROM source_db.%s.%s",
+                tableName, sourceSchema, tableName));
+
+        try {
+            List<String> dates = queryDistinctDates(stmt, tableName);
+            log.info("Found {} distinct date(s) in '__receive_time' for table '{}'", dates.size(), tableName);
+
+            for (String date : dates) {
+                String chunkTable = tableName + "_" + date.replace("-", "_");
+                log.info("Writing chunk -> '{}'", chunkTable);
+                stmt.execute(String.format(
+                        "CALL postgres_execute('target_db', 'CREATE TABLE %s.%s (LIKE %s.%s)')",
+                        targetSchema, chunkTable, sourceSchema, tableName));
+                stmt.execute(String.format(
+                        "INSERT INTO target_db.%s.%s SELECT * FROM mem_%s WHERE (\"__receive_time\"::TIMESTAMPTZ AT TIME ZONE 'UTC')::DATE = '%s'",
+                        targetSchema, chunkTable, tableName, date));
+            }
+        } finally {
+            stmt.execute("DROP TABLE mem_" + tableName);
+        }
+    }
+
+    private List<String> queryDistinctDates(Statement stmt, String tableName) throws SQLException {
+        List<String> dates = new ArrayList<>();
+        try (ResultSet rs = stmt.executeQuery(String.format(
+                "SELECT DISTINCT (\"__receive_time\"::TIMESTAMPTZ AT TIME ZONE 'UTC')::DATE AS d FROM mem_%s ORDER BY d", tableName))) {
+            while (rs.next()) {
+                dates.add(rs.getString(1));
+            }
+        }
+        return dates;
     }
 
     private long countRows(Statement stmt, String schema, String tableName) throws SQLException {
