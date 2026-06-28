@@ -19,7 +19,7 @@ class AvroToDuckDbConverter {
         for (Schema.Field field : avroSchema.getFields()) {
             cols.add(new ColumnDefinition(field.name(), toType(field.schema()), isNullable(field)));
         }
-        return new PipelineSchema(pipelineName, cols);
+        return new PipelineSchema(pipelineName, cols, avroSchema);
     }
 
     private static boolean isNullable(Schema.Field field) {
@@ -29,7 +29,9 @@ class AvroToDuckDbConverter {
         return nullUnion || field.hasDefaultValue();
     }
 
-    private static String toType(Schema schema) {
+    /** Maps an Avro type to its DuckDB SQL type string. Package-visible so the explosion builder
+     *  can reuse it for the empty-array CAST guard. */
+    static String toType(Schema schema) {
         switch (schema.getType()) {
             case STRING:
             case ENUM:      return "VARCHAR";

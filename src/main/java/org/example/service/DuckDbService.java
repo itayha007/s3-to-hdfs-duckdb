@@ -107,7 +107,7 @@ public class DuckDbService {
      * downstream Parquet write is unaware of the explosion.
      */
     public  void explodeStagingTable(Statement stmt, PipelineSchema schema) throws SQLException {
-        String explodedSelect = ArrayExplosionSqlBuilder.buildExplodedSelect("_staging", schema);
+        String explodedSelect = ArrayExplosionSqlBuilder.buildExplodedSelect("_staging", schema.getAvroSchema());
         stmt.execute("CREATE TEMP TABLE staging_exploded AS " + explodedSelect);
         stmt.execute("DROP TABLE _staging");
         stmt.execute("ALTER TABLE staging_exploded RENAME TO _staging");

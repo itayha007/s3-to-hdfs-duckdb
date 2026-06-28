@@ -1,13 +1,12 @@
 package org.example.service;
 
-import org.example.model.ColumnDefinition;
-import org.example.model.PipelineSchema;
+import org.apache.avro.Schema;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Builds a DuckDB {@code SELECT} that "explodes" every array in a {@link PipelineSchema}
+ * Builds a DuckDB {@code SELECT} that "explodes" every array in an Avro record schema
  * into one row per element, entirely in SQL.
  *
  * <p>Semantics (matching the kafka-s3-flink2 array-explosion test fixtures):
@@ -21,16 +20,16 @@ import java.util.List;
  *   <li>Fields without any array anywhere in their type pass through untouched.</li>
  * </ul>
  *
- * <p>The explosion is driven purely off the DuckDB type strings in
- * {@link ColumnDefinition#getDuckDbType()} (e.g. {@code STRUCT(id INTEGER, children VARCHAR[])}),
- * so no Avro schema is needed at explosion time.
+ * <p>Structure is read straight off the Avro {@link Schema} (element types, nested records,
+ * null-unions), so no DuckDB type-string parsing is needed. The DuckDB element type required
+ * for the empty-array guard is produced by {@link AvroToDuckDbConverter#toType(Schema)}.
  *
  * <p>Cartesian explosion is expressed with implicit-lateral comma joins:
  * <pre>
  *   FROM _staging,
- *        UNNEST(...orders...)   AS expl_1(v),
- *        UNNEST(expl_1.v.products)  AS expl_2(v),
- *        UNNEST(expl_1.v.discounts) AS expl_3(v)
+ *        UNNEST(...orders...)            AS expl_1(v),
+ *        UNNEST(expl_1.v.products)       AS expl_2(v),
+ *        UNNEST(expl_1.v.discounts)      AS expl_3(v)
  * </pre>
  * Each {@code UNNEST} may reference columns produced by earlier ones (DuckDB treats
  * UNNEST in a comma list as lateral), which gives nested per-parent explosion.
@@ -44,48 +43,87 @@ final class ArrayExplosionSqlBuilder {
     }
 
     /** Builds {@code SELECT <exploded columns> FROM <sourceRelation> <lateral unnest joins>}. */
-    static String buildExplodedSelect(String sourceRelation, PipelineSchema schema) {
-        return new ArrayExplosionSqlBuilder().build(sourceRelation, schema);
+    static String buildExplodedSelect(String sourceRelation, Schema recordSchema) {
+        return new ArrayExplosionSqlBuilder().build(sourceRelation, recordSchema);
     }
 
-    private String build(String sourceRelation, PipelineSchema schema) {
+    private String build(String sourceRelation, Schema recordSchema) {
         List<String> selectItems = new ArrayList<>();
-        for (ColumnDefinition col : schema.getColumns()) {
-            DType type = TypeParser.parse(col.getDuckDbType());
-            String colExpr = sourceRelation + "." + quoteId(col.getName());
-            selectItems.add(genValue(colExpr, type) + " AS " + quoteId(col.getName()));
+        for (Schema.Field field : recordSchema.getFields()) {
+            String colExpr = sourceRelation + "." + quoteId(field.name());
+            String value = genValue(colExpr, unwrapNull(field.schema()));
+            selectItems.add(value + " AS " + quoteId(field.name()));
         }
-        return "SELECT " + String.join(", ", selectItems)
-                + " FROM " + sourceRelation + joins;
+        return "SELECT " + String.join(", ", selectItems) + " FROM " + sourceRelation + joins;
     }
 
     /**
-     * Returns a SQL expression for the exploded value of {@code expr} (of type {@code type}),
-     * appending any UNNEST joins it needs to {@link #joins}.
+     * Returns a SQL expression for the exploded value of {@code expr} (of Avro type {@code type},
+     * already null-union-unwrapped), appending any UNNEST joins it needs to {@link #joins}.
      */
-    private String genValue(String expr, DType type) {
-        if (!type.containsArray()) {
-            return expr; // nothing to explode — pass through untouched
+    private String genValue(String expr, Schema type) {
+        switch (type.getType()) {
+            case ARRAY:
+                return genArray(expr, type);
+            case RECORD:
+                return genRecord(expr, type);
+            default:
+                return expr; // scalar / map / enum — nothing to explode
         }
-        if (type instanceof StructType) {
-            StructType st = (StructType) type;
-            StringBuilder lit = new StringBuilder("{");
-            for (int i = 0; i < st.fields.size(); i++) {
-                StructField f = st.fields.get(i);
-                if (i > 0) lit.append(", ");
-                String fieldExpr = "struct_extract(" + expr + ", " + quoteStr(f.name) + ")";
-                lit.append(quoteStr(f.name)).append(": ").append(genValue(fieldExpr, f.type));
-            }
-            return lit.append("}").toString();
-        }
-        // ArrayType: UNNEST one element per row, preserving the row for empty/null arrays.
-        ArrayType at = (ArrayType) type;
+    }
+
+    private String genArray(String expr, Schema arraySchema) {
+        Schema element = arraySchema.getElementType();
+        String elementSql = AvroToDuckDbConverter.toType(element);
+        // Preserve the row for empty/null arrays by unnesting a single NULL element instead.
         String guarded = "CASE WHEN " + expr + " IS NULL OR len(" + expr + ") = 0"
-                + " THEN [CAST(NULL AS " + at.element.sql + ")] ELSE " + expr + " END";
+                + " THEN [CAST(NULL AS " + elementSql + ")] ELSE " + expr + " END";
         String alias = "expl_" + (++aliasSeq);
         joins.append(", UNNEST(").append(guarded).append(") AS ").append(alias).append("(v)");
         // Recurse into the element so nested arrays inside record elements are also exploded.
-        return genValue(alias + ".v", at.element);
+        return genValue(alias + ".v", unwrapNull(element));
+    }
+
+    private String genRecord(String expr, Schema record) {
+        if (!containsArray(record)) {
+            return expr; // no array anywhere inside — pass the struct through untouched
+        }
+        StringBuilder lit = new StringBuilder("{");
+        List<Schema.Field> fields = record.getFields();
+        for (int i = 0; i < fields.size(); i++) {
+            Schema.Field f = fields.get(i);
+            if (i > 0) lit.append(", ");
+            String fieldExpr = "struct_extract(" + expr + ", " + quoteStr(f.name()) + ")";
+            lit.append(quoteStr(f.name())).append(": ").append(genValue(fieldExpr, unwrapNull(f.schema())));
+        }
+        return lit.append("}").toString();
+    }
+
+    private static boolean containsArray(Schema schema) {
+        switch (schema.getType()) {
+            case ARRAY:
+                return true;
+            case RECORD:
+                for (Schema.Field f : schema.getFields()) {
+                    if (containsArray(unwrapNull(f.schema()))) {
+                        return true;
+                    }
+                }
+                return false;
+            default:
+                return false;
+        }
+    }
+
+    /** Unwraps a {@code ["null", T]} union to {@code T}; returns the schema unchanged otherwise. */
+    private static Schema unwrapNull(Schema schema) {
+        if (schema.getType() != Schema.Type.UNION) {
+            return schema;
+        }
+        return schema.getTypes().stream()
+                .filter(s -> s.getType() != Schema.Type.NULL)
+                .findFirst()
+                .orElse(schema);
     }
 
     private static String quoteId(String name) {
@@ -94,190 +132,5 @@ final class ArrayExplosionSqlBuilder {
 
     private static String quoteStr(String s) {
         return "'" + s.replace("'", "''") + "'";
-    }
-
-    // =========================================================================
-    // DuckDB type tree + parser
-    // =========================================================================
-
-    abstract static class DType {
-        /** Canonical DuckDB type text, e.g. {@code VARCHAR}, {@code VARCHAR[]}, {@code STRUCT(a INTEGER)}. */
-        final String sql;
-
-        DType(String sql) {
-            this.sql = sql;
-        }
-
-        abstract boolean containsArray();
-    }
-
-    static final class ScalarType extends DType {
-        ScalarType(String sql) {
-            super(sql);
-        }
-
-        @Override
-        boolean containsArray() {
-            return false;
-        }
-    }
-
-    static final class ArrayType extends DType {
-        final DType element;
-
-        ArrayType(DType element, String sql) {
-            super(sql);
-            this.element = element;
-        }
-
-        @Override
-        boolean containsArray() {
-            return true;
-        }
-    }
-
-    static final class StructType extends DType {
-        final List<StructField> fields;
-
-        StructType(List<StructField> fields, String sql) {
-            super(sql);
-            this.fields = fields;
-        }
-
-        @Override
-        boolean containsArray() {
-            for (StructField f : fields) {
-                if (f.type.containsArray()) {
-                    return true;
-                }
-            }
-            return false;
-        }
-    }
-
-    static final class StructField {
-        final String name;
-        final DType type;
-
-        StructField(String name, DType type) {
-            this.name = name;
-            this.type = type;
-        }
-    }
-
-    /** Minimal recursive-descent parser for the DuckDB type strings emitted by AvroToDuckDbConverter. */
-    static final class TypeParser {
-        private final String s;
-        private int pos;
-
-        private TypeParser(String s) {
-            this.s = s;
-        }
-
-        static DType parse(String typeText) {
-            return new TypeParser(typeText.trim()).parseType();
-        }
-
-        private DType parseType() {
-            DType base = parseBase();
-            skipWs();
-            while (peek() == '[') {
-                expect('[');
-                skipWs();
-                expect(']');
-                base = new ArrayType(base, base.sql + "[]");
-                skipWs();
-            }
-            return base;
-        }
-
-        private DType parseBase() {
-            skipWs();
-            String word = readWord();
-            if (word.equalsIgnoreCase("STRUCT")) {
-                return parseStruct(word);
-            }
-            // MAP / DECIMAL / etc. — capture any parameter list verbatim and treat as a scalar
-            // (we never explode inside maps).
-            skipWs();
-            if (peek() == '(') {
-                return new ScalarType(word + readBalancedParens());
-            }
-            return new ScalarType(word);
-        }
-
-        private DType parseStruct(String keyword) {
-            skipWs();
-            expect('(');
-            List<StructField> fields = new ArrayList<>();
-            skipWs();
-            while (peek() != ')') {
-                String name = readWord();
-                skipWs();
-                DType fieldType = parseType();
-                fields.add(new StructField(name, fieldType));
-                skipWs();
-                if (peek() == ',') {
-                    expect(',');
-                    skipWs();
-                }
-            }
-            expect(')');
-
-            StringBuilder sql = new StringBuilder(keyword).append("(");
-            for (int i = 0; i < fields.size(); i++) {
-                if (i > 0) sql.append(", ");
-                sql.append(fields.get(i).name).append(" ").append(fields.get(i).type.sql);
-            }
-            return new StructType(fields, sql.append(")").toString());
-        }
-
-        private String readBalancedParens() {
-            skipWs();
-            StringBuilder sb = new StringBuilder();
-            expect('(');
-            sb.append('(');
-            int depth = 1;
-            while (depth > 0) {
-                char c = s.charAt(pos++);
-                sb.append(c);
-                if (c == '(') depth++;
-                else if (c == ')') depth--;
-            }
-            return sb.toString();
-        }
-
-        private String readWord() {
-            skipWs();
-            int start = pos;
-            while (pos < s.length()) {
-                char c = s.charAt(pos);
-                if (Character.isLetterOrDigit(c) || c == '_') {
-                    pos++;
-                } else {
-                    break;
-                }
-            }
-            return s.substring(start, pos);
-        }
-
-        private char peek() {
-            return pos < s.length() ? s.charAt(pos) : '\0';
-        }
-
-        private void expect(char c) {
-            skipWs();
-            if (peek() != c) {
-                throw new IllegalStateException(
-                        "Malformed DuckDB type '" + s + "': expected '" + c + "' at position " + pos);
-            }
-            pos++;
-        }
-
-        private void skipWs() {
-            while (pos < s.length() && Character.isWhitespace(s.charAt(pos))) {
-                pos++;
-            }
-        }
     }
 }
