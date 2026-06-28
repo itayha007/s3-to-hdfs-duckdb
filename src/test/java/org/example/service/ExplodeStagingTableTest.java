@@ -18,6 +18,8 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -52,7 +54,7 @@ class ExplodeStagingTableTest {
 
             ArrayNode actual = runExplosion(schema, payloadFile);
 
-            assertThat(actual).isEqualTo(tc.expected);
+            assertThat(toList(actual)).containsExactlyInAnyOrderElementsOf(toList(tc.expected));
         } finally {
             Files.deleteIfExists(payloadFile);
         }
@@ -81,6 +83,13 @@ class ExplodeStagingTableTest {
             }
         }
         return rows;
+    }
+
+    /** Rows as a list so they can be compared order-independently (explosion row order is not guaranteed). */
+    private static List<JsonNode> toList(JsonNode array) {
+        List<JsonNode> list = new ArrayList<>();
+        array.forEach(list::add);
+        return list;
     }
 
     // -------------------------------------------------------------------------
