@@ -1,38 +1,11 @@
 package org.example.service;
 
 import org.apache.avro.Schema;
-
-import java.util.ArrayList;
-import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Builds a DuckDB {@code SELECT} that "explodes" every array in an Avro record schema
  * into one row per element, entirely in SQL.
- *
- * <p>Semantics (matching the kafka-s3-flink2 array-explosion test fixtures):
- * <ul>
- *   <li>Each array field is UNNESTed — one output row per element.</li>
- *   <li>Sibling arrays at the same level produce a Cartesian product.</li>
- *   <li>Arrays nested inside record elements are recursively exploded, and the
- *       record is rebuilt as a struct holding the (now scalar/exploded) values.</li>
- *   <li>Empty or null arrays are ignored — the row is preserved with a NULL value
- *       rather than being dropped (so a single empty array can't collapse the row count).</li>
- *   <li>Fields without any array anywhere in their type pass through untouched.</li>
- * </ul>
- *
- * <p>Structure is read straight off the Avro {@link Schema} (element types, nested records,
- * null-unions), so no DuckDB type-string parsing is needed. The DuckDB element type required
- * for the empty-array guard is produced by {@link AvroToDuckDbConverter#toType(Schema)}.
- *
- * <p>Cartesian explosion is expressed with implicit-lateral comma joins:
- * <pre>
- *   FROM _staging,
- *        UNNEST(...orders...)            AS expl_1(v),
- *        UNNEST(expl_1.v.products)       AS expl_2(v),
- *        UNNEST(expl_1.v.discounts)      AS expl_3(v)
- * </pre>
- * Each {@code UNNEST} may reference columns produced by earlier ones (DuckDB treats
- * UNNEST in a comma list as lateral), which gives nested per-parent explosion.
  */
 final class ArrayExplosionSqlBuilder {
 
@@ -48,13 +21,15 @@ final class ArrayExplosionSqlBuilder {
     }
 
     private String build(String sourceRelation, Schema recordSchema) {
-        List<String> selectItems = new ArrayList<>();
-        for (Schema.Field field : recordSchema.getFields()) {
-            String colExpr = sourceRelation + "." + quoteId(field.name());
-            String value = genValue(colExpr, unwrapNull(field.schema()));
-            selectItems.add(value + " AS " + quoteId(field.name()));
-        }
-        return "SELECT " + String.join(", ", selectItems) + " FROM " + sourceRelation + joins;
+        String selectItems = recordSchema.getFields().stream()
+                .map(field -> {
+                    String colExpr = sourceRelation + "." + quoteId(field.name());
+                    String value = genValue(colExpr, unwrapNull(field.schema()));
+                    return value + " AS " + quoteId(field.name());
+                })
+                .collect(Collectors.joining(", "));
+
+        return "SELECT " + selectItems + " FROM " + sourceRelation + joins;
     }
 
     /**
@@ -75,11 +50,14 @@ final class ArrayExplosionSqlBuilder {
     private String genArray(String expr, Schema arraySchema) {
         Schema element = arraySchema.getElementType();
         String elementSql = AvroToDuckDbConverter.toType(element);
+
         // Preserve the row for empty/null arrays by unnesting a single NULL element instead.
-        String guarded = "CASE WHEN " + expr + " IS NULL OR len(" + expr + ") = 0"
-                + " THEN [CAST(NULL AS " + elementSql + ")] ELSE " + expr + " END";
+        String guarded = String.format("CASE WHEN %s IS NULL OR len(%s) = 0 THEN [CAST(NULL AS %s)] ELSE %s END",
+                expr, expr, elementSql, expr);
+
         String alias = "expl_" + (++aliasSeq);
         joins.append(", UNNEST(").append(guarded).append(") AS ").append(alias).append("(v)");
+
         // Recurse into the element so nested arrays inside record elements are also exploded.
         return genValue(alias + ".v", unwrapNull(element));
     }
@@ -88,15 +66,13 @@ final class ArrayExplosionSqlBuilder {
         if (!containsArray(record)) {
             return expr; // no array anywhere inside — pass the struct through untouched
         }
-        StringBuilder lit = new StringBuilder("{");
-        List<Schema.Field> fields = record.getFields();
-        for (int i = 0; i < fields.size(); i++) {
-            Schema.Field f = fields.get(i);
-            if (i > 0) lit.append(", ");
-            String fieldExpr = "struct_extract(" + expr + ", " + quoteStr(f.name()) + ")";
-            lit.append(quoteStr(f.name())).append(": ").append(genValue(fieldExpr, unwrapNull(f.schema())));
-        }
-        return lit.append("}").toString();
+
+        return record.getFields().stream()
+                .map(f -> {
+                    String fieldExpr = "struct_extract(" + expr + ", " + quoteStr(f.name()) + ")";
+                    return quoteStr(f.name()) + ": " + genValue(fieldExpr, unwrapNull(f.schema()));
+                })
+                .collect(Collectors.joining(", ", "{", "}"));
     }
 
     private static boolean containsArray(Schema schema) {
@@ -104,12 +80,8 @@ final class ArrayExplosionSqlBuilder {
             case ARRAY:
                 return true;
             case RECORD:
-                for (Schema.Field f : schema.getFields()) {
-                    if (containsArray(unwrapNull(f.schema()))) {
-                        return true;
-                    }
-                }
-                return false;
+                return schema.getFields().stream()
+                        .anyMatch(f -> containsArray(unwrapNull(f.schema())));
             default:
                 return false;
         }
