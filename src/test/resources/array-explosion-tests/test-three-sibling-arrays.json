@@ -1,0 +1,43 @@
+{
+  "description": "Three sibling arrays - Cartesian product",
+  "input": {
+    "schema": {
+      "type": "record",
+      "name": "Record8",
+      "fields": [
+        {
+          "name": "array1",
+          "type": {
+            "type": "array",
+            "items": "string"
+          }
+        },
+        {
+          "name": "array2",
+          "type": {
+            "type": "array",
+            "items": "string"
+          }
+        },
+        {
+          "name": "array3",
+          "type": {
+            "type": "array",
+            "items": "string"
+          }
+        }
+      ]
+    },
+    "payload": {
+      "array1": ["A", "B"],
+      "array2": ["1", "2"],
+      "array3": ["X"]
+    }
+  },
+  "output": [
+    {"array1": "A", "array2": "1", "array3": "X"},
+    {"array1": "A", "array2": "2", "array3": "X"},
+    {"array1": "B", "array2": "1", "array3": "X"},
+    {"array1": "B", "array2": "2", "array3": "X"}
+  ]
+}

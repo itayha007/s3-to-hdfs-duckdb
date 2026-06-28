@@ -1,0 +1,29 @@
+{
+  "description": "Empty arrays should be removed from output",
+  "input": {
+    "schema": {
+      "type": "record",
+      "name": "Record5",
+      "fields": [
+        {
+          "name": "field",
+          "type": "string"
+        },
+        {
+          "name": "emptyArray",
+          "type": {
+            "type": "array",
+            "items": "string"
+          }
+        }
+      ]
+    },
+    "payload": {
+      "field": "value",
+      "emptyArray": []
+    }
+  },
+  "output": [
+    {"field": "value"}
+  ]
+}

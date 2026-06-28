@@ -1,0 +1,65 @@
+{
+  "description": "Nested array with sibling arrays inside - 2 parents × (2 variants × 2 tags) = 8 records",
+  "input": {
+    "schema": {
+      "type": "record",
+      "name": "Record16",
+      "fields": [
+        {
+          "name": "products",
+          "type": {
+            "type": "array",
+            "items": {
+              "type": "record",
+              "name": "Product",
+              "fields": [
+                {
+                  "name": "id",
+                  "type": "int"
+                },
+                {
+                  "name": "variants",
+                  "type": {
+                    "type": "array",
+                    "items": "string"
+                  }
+                },
+                {
+                  "name": "tags",
+                  "type": {
+                    "type": "array",
+                    "items": "string"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "payload": {
+      "products": [
+        {
+          "id": 1,
+          "variants": ["small", "large"],
+          "tags": ["new", "sale"]
+        },
+        {
+          "id": 2,
+          "variants": ["medium", "xlarge"],
+          "tags": ["featured", "trending"]
+        }
+      ]
+    }
+  },
+  "output": [
+    {"products": {"id": 1, "variants": "small", "tags": "new"}},
+    {"products": {"id": 1, "variants": "small", "tags": "sale"}},
+    {"products": {"id": 1, "variants": "large", "tags": "new"}},
+    {"products": {"id": 1, "variants": "large", "tags": "sale"}},
+    {"products": {"id": 2, "variants": "medium", "tags": "featured"}},
+    {"products": {"id": 2, "variants": "medium", "tags": "trending"}},
+    {"products": {"id": 2, "variants": "xlarge", "tags": "featured"}},
+    {"products": {"id": 2, "variants": "xlarge", "tags": "trending"}}
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "description": "Arrays with union/nullable types",
+  "input": {
+    "schema": {
+      "type": "record",
+      "name": "Record13",
+      "fields": [
+        {
+          "name": "items",
+          "type": [
+            "null",
+            {
+              "type": "array",
+              "items": "string"
+            }
+          ]
+        },
+        {
+          "name": "tags",
+          "type": {
+            "type": "array",
+            "items": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      ]
+    },
+    "payload": {
+      "items": ["item1", "item2"],
+      "tags": ["tag1", null, "tag2"]
+    }
+  },
+  "output": [
+    {"items": "item1", "tags": "tag1"},
+    {"items": "item1", "tags": null},
+    {"items": "item1", "tags": "tag2"},
+    {"items": "item2", "tags": "tag1"},
+    {"items": "item2", "tags": null},
+    {"items": "item2", "tags": "tag2"}
+  ]
+}

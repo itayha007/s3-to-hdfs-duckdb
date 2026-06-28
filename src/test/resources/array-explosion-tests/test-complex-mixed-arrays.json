@@ -1,0 +1,96 @@
+{
+  "description": "Complex mixed: sibling arrays at level 1 AND nested arrays in each element",
+  "input": {
+    "schema": {
+      "type": "record",
+      "name": "Record12",
+      "fields": [
+        {
+          "name": "departments",
+          "type": {
+            "type": "array",
+            "items": {
+              "type": "record",
+              "name": "Department",
+              "fields": [
+                {
+                  "name": "dept_name",
+                  "type": "string"
+                },
+                {
+                  "name": "teams",
+                  "type": {
+                    "type": "array",
+                    "items": {
+                      "type": "record",
+                      "name": "Team",
+                      "fields": [
+                        {
+                          "name": "team_name",
+                          "type": "string"
+                        },
+                        {
+                          "name": "members",
+                          "type": {
+                            "type": "array",
+                            "items": "string"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "locations",
+          "type": {
+            "type": "array",
+            "items": "string"
+          }
+        }
+      ]
+    },
+    "payload": {
+      "departments": [
+        {
+          "dept_name": "Engineering",
+          "teams": [
+            {
+              "team_name": "Backend",
+              "members": ["Alice", "Bob"]
+            },
+            {
+              "team_name": "Frontend",
+              "members": ["Charlie"]
+            }
+          ]
+        },
+        {
+          "dept_name": "Sales",
+          "teams": [
+            {
+              "team_name": "Enterprise",
+              "members": ["David", "Eve"]
+            }
+          ]
+        }
+      ],
+      "locations": ["NYC", "SF"]
+    }
+  },
+  "output": [
+    {"departments": {"dept_name": "Engineering", "teams": {"team_name": "Backend", "members": "Alice"}}, "locations": "NYC"},
+    {"departments": {"dept_name": "Engineering", "teams": {"team_name": "Backend", "members": "Alice"}}, "locations": "SF"},
+    {"departments": {"dept_name": "Engineering", "teams": {"team_name": "Backend", "members": "Bob"}}, "locations": "NYC"},
+    {"departments": {"dept_name": "Engineering", "teams": {"team_name": "Backend", "members": "Bob"}}, "locations": "SF"},
+    {"departments": {"dept_name": "Engineering", "teams": {"team_name": "Frontend", "members": "Charlie"}}, "locations": "NYC"},
+    {"departments": {"dept_name": "Engineering", "teams": {"team_name": "Frontend", "members": "Charlie"}}, "locations": "SF"},
+    {"departments": {"dept_name": "Sales", "teams": {"team_name": "Enterprise", "members": "David"}}, "locations": "NYC"},
+    {"departments": {"dept_name": "Sales", "teams": {"team_name": "Enterprise", "members": "David"}}, "locations": "SF"},
+    {"departments": {"dept_name": "Sales", "teams": {"team_name": "Enterprise", "members": "Eve"}}, "locations": "NYC"},
+    {"departments": {"dept_name": "Sales", "teams": {"team_name": "Enterprise", "members": "Eve"}}, "locations": "SF"}
+  ]
+}

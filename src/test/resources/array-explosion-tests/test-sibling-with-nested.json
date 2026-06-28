@@ -1,0 +1,56 @@
+{
+  "description": "Sibling arrays where elements contain nested arrays",
+  "input": {
+    "schema": {
+      "type": "record",
+      "name": "Record4",
+      "fields": [
+        {
+          "name": "arrayA",
+          "type": {
+            "type": "array",
+            "items": "string"
+          }
+        },
+        {
+          "name": "arrayB",
+          "type": {
+            "type": "array",
+            "items": {
+              "type": "record",
+              "name": "RecordB",
+              "fields": [
+                {
+                  "name": "value",
+                  "type": "int"
+                },
+                {
+                  "name": "nested",
+                  "type": {
+                    "type": "array",
+                    "items": "string"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "payload": {
+      "arrayA": ["X", "Y"],
+      "arrayB": [
+        {
+          "value": 1,
+          "nested": ["a", "b"]
+        }
+      ]
+    }
+  },
+  "output": [
+    {"arrayA": "X", "arrayB": {"value": 1, "nested": "a"}},
+    {"arrayA": "X", "arrayB": {"value": 1, "nested": "b"}},
+    {"arrayA": "Y", "arrayB": {"value": 1, "nested": "a"}},
+    {"arrayA": "Y", "arrayB": {"value": 1, "nested": "b"}}
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "description": "Two sibling arrays - should create Cartesian product",
+  "input": {
+    "schema": {
+      "type": "record",
+      "name": "Record1",
+      "fields": [
+        {
+          "name": "array1",
+          "type": {
+            "type": "array",
+            "items": "string"
+          }
+        },
+        {
+          "name": "array2",
+          "type": {
+            "type": "array",
+            "items": "string"
+          }
+        }
+      ]
+    },
+    "payload": {
+      "array1": ["A", "B"],
+      "array2": ["1", "2"]
+    }
+  },
+  "output": [
+    {"array1": "A", "array2": "1"},
+    {"array1": "A", "array2": "2"},
+    {"array1": "B", "array2": "1"},
+    {"array1": "B", "array2": "2"}
+  ]
+}

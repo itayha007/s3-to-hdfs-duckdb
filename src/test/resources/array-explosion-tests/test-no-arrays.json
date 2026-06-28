@@ -1,0 +1,26 @@
+{
+  "description": "No arrays - should pass through unchanged",
+  "input": {
+    "schema": {
+      "type": "record",
+      "name": "Record7",
+      "fields": [
+        {
+          "name": "field1",
+          "type": "string"
+        },
+        {
+          "name": "field2",
+          "type": "int"
+        }
+      ]
+    },
+    "payload": {
+      "field1": "test",
+      "field2": 123
+    }
+  },
+  "output": [
+    {"field1": "test", "field2": 123}
+  ]
+}

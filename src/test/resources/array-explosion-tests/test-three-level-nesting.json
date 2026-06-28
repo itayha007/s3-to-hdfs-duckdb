@@ -1,0 +1,82 @@
+{
+  "description": "Three levels of nesting: level1 -> level2 -> level3",
+  "input": {
+    "schema": {
+      "type": "record",
+      "name": "Record3",
+      "fields": [
+        {
+          "name": "level1",
+          "type": {
+            "type": "array",
+            "items": {
+              "type": "record",
+              "name": "Level1",
+              "fields": [
+                {
+                  "name": "id",
+                  "type": "string"
+                },
+                {
+                  "name": "level2",
+                  "type": {
+                    "type": "array",
+                    "items": {
+                      "type": "record",
+                      "name": "Level2",
+                      "fields": [
+                        {
+                          "name": "num",
+                          "type": "int"
+                        },
+                        {
+                          "name": "level3",
+                          "type": {
+                            "type": "array",
+                            "items": "string"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "payload": {
+      "level1": [
+        {
+          "id": "X",
+          "level2": [
+            {
+              "num": 1,
+              "level3": ["a", "b"]
+            },
+            {
+              "num": 2,
+              "level3": ["c"]
+            }
+          ]
+        },
+        {
+          "id": "Y",
+          "level2": [
+            {
+              "num": 3,
+              "level3": ["d"]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "output": [
+    {"level1": {"id": "X", "level2": {"num": 1, "level3": "a"}}},
+    {"level1": {"id": "X", "level2": {"num": 1, "level3": "b"}}},
+    {"level1": {"id": "X", "level2": {"num": 2, "level3": "c"}}},
+    {"level1": {"id": "Y", "level2": {"num": 3, "level3": "d"}}}
+  ]
+}

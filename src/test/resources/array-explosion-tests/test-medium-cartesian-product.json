@@ -1,0 +1,51 @@
+{
+  "description": "Medium Cartesian product - 2×3×2 = 12 output records",
+  "input": {
+    "schema": {
+      "type": "record",
+      "name": "Record11",
+      "fields": [
+        {
+          "name": "colors",
+          "type": {
+            "type": "array",
+            "items": "string"
+          }
+        },
+        {
+          "name": "sizes",
+          "type": {
+            "type": "array",
+            "items": "string"
+          }
+        },
+        {
+          "name": "materials",
+          "type": {
+            "type": "array",
+            "items": "string"
+          }
+        }
+      ]
+    },
+    "payload": {
+      "colors": ["red", "blue"],
+      "sizes": ["S", "M", "L"],
+      "materials": ["cotton", "polyester"]
+    }
+  },
+  "output": [
+    {"colors": "red", "sizes": "S", "materials": "cotton"},
+    {"colors": "red", "sizes": "S", "materials": "polyester"},
+    {"colors": "red", "sizes": "M", "materials": "cotton"},
+    {"colors": "red", "sizes": "M", "materials": "polyester"},
+    {"colors": "red", "sizes": "L", "materials": "cotton"},
+    {"colors": "red", "sizes": "L", "materials": "polyester"},
+    {"colors": "blue", "sizes": "S", "materials": "cotton"},
+    {"colors": "blue", "sizes": "S", "materials": "polyester"},
+    {"colors": "blue", "sizes": "M", "materials": "cotton"},
+    {"colors": "blue", "sizes": "M", "materials": "polyester"},
+    {"colors": "blue", "sizes": "L", "materials": "cotton"},
+    {"colors": "blue", "sizes": "L", "materials": "polyester"}
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "description": "Array of records containing arrays - each parent explodes with its own children",
+  "input": {
+    "schema": {
+      "type": "record",
+      "name": "Record2",
+      "fields": [
+        {
+          "name": "parents",
+          "type": {
+            "type": "array",
+            "items": {
+              "type": "record",
+              "name": "Parent",
+              "fields": [
+                {
+                  "name": "id",
+                  "type": "int"
+                },
+                {
+                  "name": "children",
+                  "type": {
+                    "type": "array",
+                    "items": "string"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "payload": {
+      "parents": [
+        {
+          "id": 1,
+          "children": ["A", "B"]
+        },
+        {
+          "id": 2,
+          "children": ["C"]
+        }
+      ]
+    }
+  },
+  "output": [
+    {"parents": {"id": 1, "children": "A"}},
+    {"parents": {"id": 1, "children": "B"}},
+    {"parents": {"id": 2, "children": "C"}}
+  ]
+}

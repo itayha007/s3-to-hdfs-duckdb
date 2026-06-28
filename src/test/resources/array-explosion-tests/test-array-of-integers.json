@@ -1,0 +1,35 @@
+{
+  "description": "Arrays with primitive types (integers)",
+  "input": {
+    "schema": {
+      "type": "record",
+      "name": "Record9",
+      "fields": [
+        {
+          "name": "ids",
+          "type": {
+            "type": "array",
+            "items": "int"
+          }
+        },
+        {
+          "name": "codes",
+          "type": {
+            "type": "array",
+            "items": "long"
+          }
+        }
+      ]
+    },
+    "payload": {
+      "ids": [100, 200],
+      "codes": [1, 2]
+    }
+  },
+  "output": [
+    {"ids": 100, "codes": 1},
+    {"ids": 100, "codes": 2},
+    {"ids": 200, "codes": 1},
+    {"ids": 200, "codes": 2}
+  ]
+}

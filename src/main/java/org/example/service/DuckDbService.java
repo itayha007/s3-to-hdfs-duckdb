@@ -42,6 +42,7 @@ public class DuckDbService {
         try (Connection conn = connect(); Statement stmt = conn.createStatement()) {
             this.loadFromS3IntoRawStagingTable(stmt, s3Uri, schema);
             this.validateRequiredFields(stmt, schema);
+            this.explodeStagingTable(stmt, schema);
             this.writeParquet(stmt, output);
         }
 
@@ -97,6 +98,19 @@ public class DuckDbService {
                 }
             }
         }
+    }
+
+    /**
+     * Explodes every array in the schema (one row per element, Cartesian across siblings,
+     * recursive for nested record arrays) entirely in SQL. Materializes the result into a
+     * {@code staging_exploded} table and swaps it in as the new {@code _staging} table, so the
+     * downstream Parquet write is unaware of the explosion.
+     */
+    public  void explodeStagingTable(Statement stmt, PipelineSchema schema) throws SQLException {
+        String explodedSelect = ArrayExplosionSqlBuilder.buildExplodedSelect("_staging", schema);
+        stmt.execute("CREATE TEMP TABLE staging_exploded AS " + explodedSelect);
+        stmt.execute("DROP TABLE _staging");
+        stmt.execute("ALTER TABLE staging_exploded RENAME TO _staging");
     }
 
     private void writeParquet(Statement stmt, Path output) throws SQLException {

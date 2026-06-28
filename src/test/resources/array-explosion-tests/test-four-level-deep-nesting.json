@@ -1,0 +1,118 @@
+{
+  "description": "Four levels of nesting - very deep hierarchy",
+  "input": {
+    "schema": {
+      "type": "record",
+      "name": "Record10",
+      "fields": [
+        {
+          "name": "level1",
+          "type": {
+            "type": "array",
+            "items": {
+              "type": "record",
+              "name": "Level1",
+              "fields": [
+                {
+                  "name": "l1_id",
+                  "type": "string"
+                },
+                {
+                  "name": "level2",
+                  "type": {
+                    "type": "array",
+                    "items": {
+                      "type": "record",
+                      "name": "Level2",
+                      "fields": [
+                        {
+                          "name": "l2_id",
+                          "type": "int"
+                        },
+                        {
+                          "name": "level3",
+                          "type": {
+                            "type": "array",
+                            "items": {
+                              "type": "record",
+                              "name": "Level3",
+                              "fields": [
+                                {
+                                  "name": "l3_id",
+                                  "type": "string"
+                                },
+                                {
+                                  "name": "level4",
+                                  "type": {
+                                    "type": "array",
+                                    "items": "string"
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "payload": {
+      "level1": [
+        {
+          "l1_id": "A",
+          "level2": [
+            {
+              "l2_id": 1,
+              "level3": [
+                {
+                  "l3_id": "X",
+                  "level4": ["alpha", "beta"]
+                },
+                {
+                  "l3_id": "Y",
+                  "level4": ["gamma"]
+                }
+              ]
+            },
+            {
+              "l2_id": 2,
+              "level3": [
+                {
+                  "l3_id": "Z",
+                  "level4": ["delta"]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "l1_id": "B",
+          "level2": [
+            {
+              "l2_id": 3,
+              "level3": [
+                {
+                  "l3_id": "W",
+                  "level4": ["epsilon"]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "output": [
+    {"level1": {"l1_id": "A", "level2": {"l2_id": 1, "level3": {"l3_id": "X", "level4": "alpha"}}}},
+    {"level1": {"l1_id": "A", "level2": {"l2_id": 1, "level3": {"l3_id": "X", "level4": "beta"}}}},
+    {"level1": {"l1_id": "A", "level2": {"l2_id": 1, "level3": {"l3_id": "Y", "level4": "gamma"}}}},
+    {"level1": {"l1_id": "A", "level2": {"l2_id": 2, "level3": {"l3_id": "Z", "level4": "delta"}}}},
+    {"level1": {"l1_id": "B", "level2": {"l2_id": 3, "level3": {"l3_id": "W", "level4": "epsilon"}}}}
+  ]
+}

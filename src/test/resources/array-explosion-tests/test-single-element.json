@@ -1,0 +1,24 @@
+{
+  "description": "Single element arrays should explode to single record",
+  "input": {
+    "schema": {
+      "type": "record",
+      "name": "Record6",
+      "fields": [
+        {
+          "name": "array",
+          "type": {
+            "type": "array",
+            "items": "string"
+          }
+        }
+      ]
+    },
+    "payload": {
+      "array": ["only-one"]
+    }
+  },
+  "output": [
+    {"array": "only-one"}
+  ]
+}

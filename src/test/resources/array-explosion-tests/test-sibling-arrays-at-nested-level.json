@@ -1,0 +1,62 @@
+{
+  "description": "Multiple sibling arrays at nested level - Cartesian within nested record",
+  "input": {
+    "schema": {
+      "type": "record",
+      "name": "Record14",
+      "fields": [
+        {
+          "name": "orders",
+          "type": {
+            "type": "array",
+            "items": {
+              "type": "record",
+              "name": "Order",
+              "fields": [
+                {
+                  "name": "order_id",
+                  "type": "int"
+                },
+                {
+                  "name": "products",
+                  "type": {
+                    "type": "array",
+                    "items": "string"
+                  }
+                },
+                {
+                  "name": "discounts",
+                  "type": {
+                    "type": "array",
+                    "items": "string"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "payload": {
+      "orders": [
+        {
+          "order_id": 1,
+          "products": ["laptop", "mouse"],
+          "discounts": ["10%", "20%"]
+        },
+        {
+          "order_id": 2,
+          "products": ["keyboard"],
+          "discounts": ["5%"]
+        }
+      ]
+    }
+  },
+  "output": [
+    {"orders": {"order_id": 1, "products": "laptop", "discounts": "10%"}},
+    {"orders": {"order_id": 1, "products": "laptop", "discounts": "20%"}},
+    {"orders": {"order_id": 1, "products": "mouse", "discounts": "10%"}},
+    {"orders": {"order_id": 1, "products": "mouse", "discounts": "20%"}},
+    {"orders": {"order_id": 2, "products": "keyboard", "discounts": "5%"}}
+  ]
+}
